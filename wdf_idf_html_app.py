@@ -136,8 +136,13 @@ if st.button("🔍 Analysieren"):
 
         texts = [t for _, t in text_bodies if t.strip()]
         urls = [u for u, t in text_bodies if t.strip()]
+        
+        # Wortanzahl roh (ungefiltert)
+        raw_word_counts = [len(re.findall(r"\b\w+\b", t)) for t in texts]
+        
+        # Bereinigte Texte (ohne Stoppwörter, nur alphabetisch)
         cleaned = [" ".join([w for w in t.lower().split() if w.isalpha() and w not in stopwords]) for t in texts]
-        word_counts = [len(re.findall(r"\b\w+\b", t)) for t in texts]
+        clean_word_counts = [len(t.split()) for t in cleaned]  # Bereinigte Wortanzahl
 
         if len(texts) < 2:
             st.warning("Bitte gib mindestens zwei Texte ein, um die Analyse durchzuführen.")
@@ -147,8 +152,9 @@ if st.button("🔍 Analysieren"):
             terms = vectorizer.get_feature_names_out()
             df_counts = pd.DataFrame(matrix.toarray(), columns=terms, index=urls).T
             df_density = df_counts.copy()
+
             for i, label in enumerate(urls):
-            df_density[label] = (df_counts[label] / clean_word_counts[i] * 100).round(2)
+                df_density[label] = (df_counts[label] / clean_word_counts[i] * 100).round(2)
 
             df_avg = df_density.mean(axis=1)
             top_terms = df_avg.sort_values(ascending=False).head(50).index
@@ -182,7 +188,10 @@ if st.button("🔍 Analysieren"):
             top_table = pd.DataFrame(index=range(1, 21))
             for i, url in enumerate(urls):
                 top_words = df_density[url].sort_values(ascending=False).head(20)
-                formatted = [f"{term} (KD: {round(df_density[url][term], 2)}%, TF: {df_counts[url][term]})" for term in top_words.index]
+                formatted = [
+                    f"{term} (KD: {round(df_density[url][term], 2)}%, TF: {df_counts[url][term]})"
+                    for term in top_words.index
+                ]
                 st.markdown(f"**{url}** – Länge: {raw_word_counts[i]} Wörter (bereinigt: {clean_word_counts[i]})")
                 top_table[url] = formatted
             st.dataframe(top_table)
@@ -201,7 +210,7 @@ if st.button("🔍 Analysieren"):
                 max_val = col[col != 0].max()
                 return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
 
-            for i, raw in enumerate(texts[:len(urls)]):
+            for i, raw in enumerate(cleaned[:len(urls)]):
                 df_split = split_counts(raw, top_terms)
                 st.markdown(f"**{urls[i]}**")
                 styled = df_split.style.apply(highlight_max_nonzero, axis=0)
