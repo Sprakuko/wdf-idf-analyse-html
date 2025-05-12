@@ -4,16 +4,29 @@ import numpy as np
 from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="HTML Heading Check", layout="wide")
-st.title("📋 H-Tags & Meta-Daten Analyse")
+st.title("📋 H-Tags & Meta-Daten Analyse im Vergleich")
+
+st.markdown("Bitte gib für jeden Quelltext eine URL und den vollständigen HTML-Code ein.")
+
+urls = []
+htmls = []
 
 col1, col2, col3, col4 = st.columns(4)
-html1 = col1.text_area("🔍 Quelltext – Dein HTML", height=300)
-html2 = col2.text_area("Vergleichstext 1", height=300)
-html3 = col3.text_area("Vergleichstext 2", height=300)
-html4 = col4.text_area("Vergleichstext 3", height=300)
 
-html_list = [html1, html2, html3, html4]
-labels = ["Dein HTML", "Vergleich 1", "Vergleich 2", "Vergleich 3"]
+with col1:
+    url1 = st.text_input("🌐 URL zu deinem HTML")
+    html1 = st.text_area("Quelltext 1", height=300)
+with col2:
+    url2 = st.text_input("URL Vergleich 1")
+    html2 = st.text_area("Vergleich 1", height=300)
+with col3:
+    url3 = st.text_input("URL Vergleich 2")
+    html3 = st.text_area("Vergleich 2", height=300)
+with col4:
+    url4 = st.text_input("URL Vergleich 3")
+    html4 = st.text_area("Vergleich 3", height=300)
+
+inputs = [(url1, html1), (url2, html2), (url3, html3), (url4, html4)]
 
 # Funktion zum Parsen von HTML und Ausgabe der H-Tags inkl. Hierarchiekontrolle
 def parse_html_structure(html):
@@ -33,32 +46,56 @@ def parse_html_structure(html):
         current_level = headings[i][0]
         prev_level = headings[i - 1][0] if i > 0 else current_level
         if current_level > prev_level + 1:
-            styles.append("background-color: #ffcdd2")
+            styles.append("🔴")
         else:
             styles.append("")
 
     headings_text = [h[1] for h in headings]
     return h1_text, meta_title, meta_description, headings_text, styles
 
-# Auswertung
-for i, html in enumerate(html_list):
-    if html.strip():
-        h1_text, meta_title, meta_desc, headings, styles = parse_html_structure(html)
-        st.markdown(f"### 🧾 {labels[i]}")
-        st.markdown(f"**H1-Titel:** {h1_text}")
-        st.markdown(f"**Meta-Title:** {meta_title}")
-        st.markdown(f"**Meta-Description:** {meta_desc}")
+# Ergebnisse sammeln
+valid_inputs = [(url, html) for url, html in inputs if url.strip() and html.strip()]
 
-        df = pd.DataFrame({"Überschriften": headings, "Fehler": ["🔴" if s else "" for s in styles]})
+if len(valid_inputs) < 2:
+    st.warning("Bitte gib mindestens zwei vollständige HTML-Quelltexte und ihre zugehörigen URLs ein.")
+else:
+    h1_list = []
+    title_list = []
+    desc_list = []
+    headings_dict = {}
+    error_marks = {}
 
-        def to_colored_html(df):
-            html = "<table style='border-collapse: collapse; width: 100%;'>"
-            html += "<tr><th style='border: 1px solid #ddd; padding: 8px;'>Fehler</th><th style='border: 1px solid #ddd; padding: 8px;'>Überschrift</th></tr>"
-            for _, row in df.iterrows():
-                bg = " style='background-color: #ffcdd2;'" if row["Fehler"] else ""
-                html += f"<tr{bg}><td style='border: 1px solid #ddd; padding: 8px;'>{row['Fehler']}</td><td style='border: 1px solid #ddd; padding: 8px;'>{row['Überschriften']}</td></tr>"
-            html += "</table>"
-            return html
+    for url, html in valid_inputs:
+        h1, title, desc, headings, errors = parse_html_structure(html)
+        urls.append(url)
+        h1_list.append(h1)
+        title_list.append(title)
+        desc_list.append(desc)
+        headings_dict[url] = headings
+        error_marks[url] = errors
 
-        st.markdown(to_colored_html(df), unsafe_allow_html=True)
-        st.markdown("---")
+    # Meta-Infos anzeigen
+    meta_df = pd.DataFrame({
+        "URL": urls,
+        "H1-Titel": h1_list,
+        "Meta-Title": title_list,
+        "Meta-Description": desc_list
+    })
+    st.subheader("🔎 Meta-Informationen & H1")
+    st.dataframe(meta_df)
+
+    # Überschriftenvergleich nebeneinander
+    st.subheader("📑 Überschriftenstruktur im Vergleich (Reihenfolge & Hierarchiefehler)")
+    max_len = max(len(v) for v in headings_dict.values())
+    rows = []
+    for i in range(max_len):
+        row = []
+        for url in urls:
+            heading = headings_dict[url][i] if i < len(headings_dict[url]) else ""
+            error = error_marks[url][i] if i < len(error_marks[url]) else ""
+            cell = f"{heading} {error}" if heading else ""
+            row.append(cell)
+        rows.append(row)
+
+    table_df = pd.DataFrame(rows, columns=urls)
+    st.dataframe(table_df)
