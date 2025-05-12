@@ -194,6 +194,19 @@ if st.button("🔍 Analysieren"):
                 result.append([count.get(term, 0) for term in terms])
             return pd.DataFrame(result, index=["Anfang", "Mitte", "Ende"], columns=terms)
 
+        st.subheader("📘 Vergleichsmatrix: Unique Terms pro Text")
+        unique_matrix = pd.DataFrame(index=top_terms, columns=urls)
+
+        for term in top_terms:
+            appearances = [df_counts[url][term] > 0 for url in urls]
+            if sum(appearances) == 1:
+                for i, present in enumerate(appearances):
+                    unique_matrix.iloc[top_terms.get_loc(term), i] = "✅" if present else ""
+            else:
+                unique_matrix.loc[term] = ""
+
+        st.dataframe(unique_matrix.fillna(""), use_container_width=True)
+
         def highlight_max_nonzero(col):
             max_val = col[col != 0].max()
             return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
