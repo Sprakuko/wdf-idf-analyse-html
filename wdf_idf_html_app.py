@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import difflib
 
 st.set_page_config(page_title="WDF*IDF HTML Analyse", layout="wide")
-st.title("🔍 WDF*IDF + H-Tag Vergleich aus HTML-Quelltexten")
+st.title("🔍 WDF*IDF + Headline-Vergleich (aus HTML-Quelltexten)")
 
 main_html = st.text_area("📝 HTML-Quelltext deines Textes", height=200)
 main_url = st.text_input("🌐 URL zu deinem Text")
@@ -42,10 +42,12 @@ stopwords = set([
 def extract_text_and_headings(html):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text(separator=" ")
-    headings = {}
+    headings = []
     for i in range(1, 7):
-        tag = f"h{i}"
-        headings[tag] = [h.get_text().strip() for h in soup.find_all(tag)]
+        for h in soup.find_all(f"h{i}"):
+            content = h.get_text(strip=True)
+            if content:
+                headings.append(f"H{i}: {content}")
     return text, headings
 
 def clean(text):
@@ -62,39 +64,28 @@ if st.button("🔍 Analyse starten"):
             texts.append(plain_text)
             headings_list.append(headings)
 
-        # Headline-Vergleich anzeigen
-        st.subheader("🧠 Übersicht: H1-H6 Überschriftenstruktur")
-        all_rows = []
-        for i, url in enumerate(urls):
-            row = {}
-            for h in range(1, 7):
-                tag = f"h{h}"
-                row[tag] = " | ".join(headings_list[i][tag]) if tag in headings_list[i] else ""
-            row["URL"] = url
-            all_rows.append(row)
-        df_headlines = pd.DataFrame(all_rows).set_index("URL")
-        st.dataframe(df_headlines)
+        st.subheader("📚 Headline-Strukturvergleich")
+        max_len = max(len(h) for h in headings_list)
+        for h in headings_list:
+            h.extend([""] * (max_len - len(h)))  # auffüllen für gleich lange Spalten
+        df_headings = pd.DataFrame({urls[i]: headings_list[i] for i in range(len(urls))})
+        st.dataframe(df_headings)
 
-        # Ähnlichkeit farblich markieren
-        st.subheader("🎯 Semantisch ähnliche Begriffe (aus H-Tags)")
-        all_terms = []
-        for h_dict in headings_list:
-            for tags in h_dict.values():
-                all_terms.extend(tags)
+        st.subheader("🎯 Semantisch ähnliche Überschriften")
+        all_h = [h for sublist in headings_list for h in sublist]
         matches = set()
-        for term in all_terms:
-            for other in all_terms:
+        for term in all_h:
+            for other in all_h:
                 if term != other and difflib.SequenceMatcher(None, term, other).ratio() > 0.75:
                     matches.add(term)
                     matches.add(other)
         if matches:
-            st.markdown("**Ähnliche Begriffe (Überschriften):**")
+            st.markdown("**Ähnliche Begriffe (aus H-Tags):**")
             st.markdown(", ".join(sorted(matches)))
         else:
-            st.info("Keine stark ähnlichen Begriffe in den H-Tags gefunden.")
+            st.info("Keine stark ähnlichen Überschriften gefunden.")
 
-        # WDF*IDF Analyse
-        st.subheader("📊 WDF*IDF Analyse auf sichtbarem HTML-Text")
+        st.subheader("📊 WDF*IDF Analyse")
         cleaned = [clean(t) for t in texts]
         word_counts = [len(t.split()) for t in cleaned]
         vectorizer = CountVectorizer()
