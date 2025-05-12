@@ -182,27 +182,27 @@ if st.button("🔍 Analysieren"):
             top_table[url] = formatted
         st.dataframe(top_table)
 
-        # 📍 Drittelverteilung der Begriffe
+                # 📍 Drittelverteilung der Begriffe
         st.subheader("📍 Drittelverteilung der Begriffe")
 
         def split_counts(cleaned_text, terms):
             words = cleaned_text.split()
             thirds = np.array_split(words, 3)
             result = []
-        for part in thirds:
-            count = pd.Series(part).value_counts()
-            result.append([count.get(term, 0) for term in terms])
-        return pd.DataFrame(result, index=["Anfang", "Mitte", "Ende"], columns=terms)
+            for part in thirds:
+                count = pd.Series(part).value_counts()
+                result.append([count.get(term, 0) for term in terms])
+            return pd.DataFrame(result, index=["Anfang", "Mitte", "Ende"], columns=terms)
 
         def highlight_max_nonzero(col):
             max_val = col[col != 0].max()
-        return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
+            return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
 
         for i, text in enumerate(cleaned_texts):
             df_split = split_counts(text, top_terms)
             st.markdown(f"**{urls[i]}**")
-    if df_split.empty:
-        st.warning(f"⚠️ Keine Begriffe in {urls[i]}")
-    else:
-        styled = df_split.style.apply(highlight_max_nonzero, axis=0)
-        st.dataframe(styled)
+            if df_split.empty:
+                st.warning(f"⚠️ Keine Begriffe in {urls[i]}")
+            else:
+                styled = df_split.style.apply(highlight_max_nonzero, axis=0)
+                st.dataframe(styled)
