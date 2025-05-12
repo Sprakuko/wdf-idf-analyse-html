@@ -39,16 +39,26 @@ def parse_html_structure(html):
 
     headings = []
     for tag in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
-        headings.append((int(tag.name[1]), f"{tag.name.upper()}: {tag.get_text(strip=True)}"))
+        headings.append((int(tag.name[1]), f"{tag.name.upper()}: {tag.get_text(strip=True)}", tag.name.lower()))
 
     styles = []
+    h1_count = 0
     for i in range(len(headings)):
         current_level = headings[i][0]
+        tag_name = headings[i][2]
         prev_level = headings[i - 1][0] if i > 0 else current_level
+
+        style = ""
+
         if current_level > prev_level + 1:
-            styles.append("background-color: #ffcdd2")
-        else:
-            styles.append("")
+            style = "background-color: #ffcdd2"
+
+        if tag_name == "h1":
+            h1_count += 1
+            if i != 0 or h1_count > 1:
+                style = "background-color: #ffcdd2"
+
+        styles.append(style)
 
     headings_text = [h[1] for h in headings]
     return h1_text, meta_title, meta_description, headings_text, styles
