@@ -43,11 +43,10 @@ def extract_text_and_headings(html):
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text(separator=" ")
     headings = []
-    for i in range(1, 7):
-        for h in soup.find_all(f"h{i}"):
-            content = h.get_text(strip=True)
-            if content:
-                headings.append(f"H{i}: {content}")
+    for tag in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):  # in Reihenfolge
+        content = tag.get_text(separator=" ", strip=True)
+        if content:
+            headings.append(f"{tag.name.upper()}: {content}")
     return text, headings
 
 def clean(text):
@@ -64,10 +63,10 @@ if st.button("🔍 Analyse starten"):
             texts.append(plain_text)
             headings_list.append(headings)
 
-        st.subheader("📚 Headline-Strukturvergleich")
+        st.subheader("📚 Headline-Strukturvergleich (in Seiten-Reihenfolge)")
         max_len = max(len(h) for h in headings_list)
         for h in headings_list:
-            h.extend([""] * (max_len - len(h)))  # auffüllen für gleich lange Spalten
+            h.extend([""] * (max_len - len(h)))
         df_headings = pd.DataFrame({urls[i]: headings_list[i] for i in range(len(urls))})
         st.dataframe(df_headings)
 
