@@ -97,8 +97,9 @@ if st.button("🔍 Analysieren"):
 
         df_meta = pd.DataFrame(meta_infos)
 
-        # Scrollbare Tabelle anzeigen
-        st.dataframe(df_meta, use_container_width=True)
+        # HTML-Tabelle mit horizontalem Scrollen
+        styled_meta = df_meta.style.set_table_attributes('style="overflow-x:auto; display:block;"')
+        st.markdown(styled_meta.to_html(escape=False), unsafe_allow_html=True)
 
         st.subheader("📑 Überschriftenstruktur im Vergleich")
         if show_heading_warning:
