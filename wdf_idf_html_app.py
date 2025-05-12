@@ -177,13 +177,24 @@ if st.button("🔍 Analysieren"):
 
         st.plotly_chart(fig, use_container_width=True)
 
-        st.subheader("🏅 Top-20 Begriffe je Text")
+        st.subheader("🏅 Top-20 Begriffe je Text (mit KD + TF)")
+
         top_table = pd.DataFrame(index=range(1, 21))
-        for i, url in enumerate(urls):
-            top_words = df_density[url].sort_values(ascending=False).head(20)
-            formatted = [f"{term} (KD: {df_density[url][term]}%, TF: {df_counts[url][term]})" for term in top_words.index]
-            st.markdown(f"**{url}** – Länge: {raw_word_counts[i]} Wörter (bereinigt: {clean_word_counts[i]})")
-            top_table[url] = formatted
+
+        for i, url in enumerate(df_density.columns):
+            try:
+                top_words = df_density[url].sort_values(ascending=False).head(20)
+                formatted = [
+                    f"{term} (KD: {round(df_density.at[term, url], 2)}%, TF: {df_counts.at[term, url]})"
+                    for term in top_words.index
+                ]
+                raw_len = raw_word_counts[i] if i < len(raw_word_counts) else "?"
+                clean_len = clean_word_counts[i] if i < len(clean_word_counts) else "?"
+                st.markdown(f"**{url}** – Länge: {raw_len} Wörter (bereinigt: {clean_len})")
+                top_table[url] = formatted
+            except KeyError:
+                st.warning(f"⚠️ Daten für {url} nicht verfügbar.")
+
         st.dataframe(top_table)
 
         st.subheader("📍 Drittelverteilung der Begriffe")
@@ -201,11 +212,19 @@ if st.button("🔍 Analysieren"):
             max_val = col[col != 0].max()
             return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
 
-        for i, text in enumerate(cleaned_texts):
+        for i in range(len(cleaned_texts)):
+            url = df_density.columns[i] if i < len(df_density.columns) else f"Text {i+1}"
+            text = cleaned_texts[i]
+
+            if not text.strip():
+                st.warning(f"⚠️ Kein bereinigter Textinhalt in {url}")
+                continue
+
             df_split = split_counts(text, top_terms)
-            st.markdown(f"**{urls[i]}**")
+
+            st.markdown(f"**{url}**")
             if df_split.empty:
-                st.warning(f"⚠️ Keine Begriffe in {urls[i]}")
+                st.warning(f"⚠️ Keine Begriffe aus den Top 50 im Text von {url}")
             else:
                 styled = df_split.style.apply(highlight_max_nonzero, axis=0)
                 st.dataframe(styled)
