@@ -81,7 +81,24 @@ if st.button("🔍 Analysieren"):
                 show_heading_warning = True
 
         st.subheader("🔎 Meta-Informationen")
-        st.dataframe(pd.DataFrame(meta_infos))
+
+        def format_with_length(text, limit):
+            if not text:
+                return "-"
+            length = len(text)
+            if length > limit:
+                return f"❗️{text} ({length} Zeichen)"
+            else:
+                return f"{text} ({length} Zeichen)"
+
+        for info in meta_infos:
+            info["Meta-Title"] = format_with_length(info["Meta-Title"], 60)
+            info["Meta-Description"] = format_with_length(info["Meta-Description"], 160)
+
+        df_meta = pd.DataFrame(meta_infos)
+
+        # Scrollbare Tabelle anzeigen
+        st.dataframe(df_meta, use_container_width=True)
 
         st.subheader("📑 Überschriftenstruktur im Vergleich")
         if show_heading_warning:
