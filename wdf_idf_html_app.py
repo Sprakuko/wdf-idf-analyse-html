@@ -102,7 +102,9 @@ if st.button("🔍 Analysieren"):
         styled_df = pd.DataFrame(rows, columns=heading_data.keys())
         st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
-        # ==== Abschnitt 2: WDF*IDF Analyse ====
+           # ==== Abschnitt 2: WDF*IDF Analyse ====
+
+        # Robust aufbereitete Stoppwortliste
         stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
         der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
         einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
@@ -115,9 +117,9 @@ if st.button("🔍 Analysieren"):
         welcher, welches, wenn, wer, werde, werden, werdet, weshalb, wie, wieder, will, wir,
         wird, wirst, wo, wollen, wollte, würde, würden, zu, zum, zur, über"""
 
-# Robust aufteilen – unabhängig von Komma + Leerzeichen
-stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
+        stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
 
+        # Optional: eigene Stoppwörter hinzufügen
         if custom_stops:
             user_stops = set(w.strip().lower() for w in custom_stops.split(",") if w.strip())
             stopwords.update(user_stops)
@@ -137,7 +139,7 @@ stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
         matrix = vectorizer.fit_transform(cleaned_texts)
         terms = vectorizer.get_feature_names_out()
 
-        # DEBUG: Prüfe, ob Stoppwörter durchgerutscht sind
+        # Debug: Welche Begriffe sollten gefiltert sein, sind es aber nicht?
         suspicious_terms = [t for t in terms if t in stopwords]
         if suspicious_terms:
             st.warning(f"⚠️ Diese Begriffe wurden trotz Filterung erkannt: {', '.join(suspicious_terms)}")
@@ -153,6 +155,7 @@ stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
         df_top_counts = df_counts.loc[top_terms]
         avg_top = df_top_density.mean(axis=1)
 
+        # 📊 Diagramm
         st.subheader("📊 Interaktives Diagramm: Balken = Durchschnitt, Linien = Keyworddichte, Hover = Termfrequenz")
         fig = go.Figure()
         fig.add_trace(go.Bar(x=top_terms, y=avg_top, name="Durchschnitt", marker_color="lightgray"))
@@ -175,6 +178,7 @@ stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
         )
         st.plotly_chart(fig, use_container_width=True)
 
+        # 🏅 Top-20 Begriffe
         st.subheader("🏅 Top-20 Begriffe je Text (mit KD + TF)")
         top_table = pd.DataFrame(index=range(1, 21))
         for i, url in enumerate(urls):
@@ -187,6 +191,7 @@ stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
             top_table[url] = formatted
         st.dataframe(top_table)
 
+        # 📍 Drittelverteilung
         st.subheader("📍 Drittelverteilung der Begriffe")
         def split_counts(cleaned_text, terms):
             words = cleaned_text.split()
@@ -197,6 +202,17 @@ stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
                 result.append([count.get(term, 0) for term in terms])
             return pd.DataFrame(result, index=["Anfang", "Mitte", "Ende"], columns=terms)
 
+        def highlight_max_nonzero(col):
+            max_val = col[col != 0].max()
+            return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
+
+        for i, text in enumerate(cleaned_texts):
+            df_split = split_counts(text, top_terms)
+            st.markdown(f"**{urls[i]}**")
+            styled = df_split.style.apply(highlight_max_nonzero, axis=0)
+            st.dataframe(styled)
+
+        # 📘 Unique Terms Matrix
         st.subheader("📘 Vergleichsmatrix: Unique Terms pro Text")
         unique_matrix = pd.DataFrame(index=top_terms, columns=urls)
 
