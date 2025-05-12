@@ -141,24 +141,40 @@ if st.button("🔍 Analysieren"):
         avg_top = df_top_density.mean(axis=1)
 
         st.subheader("📊 Interaktives Diagramm")
+
         fig = go.Figure()
         fig.add_trace(go.Bar(x=top_terms, y=avg_top, name="Durchschnitt", marker_color="lightgray"))
+
         for label in urls:
-            fig.add_trace(go.Scatter(
-                x=top_terms,
-                y=df_top_density[label],
-                mode='lines+markers',
-                name=label,
-                text=[f"TF: {df_top_counts[label][term]}" for term in top_terms],
-                hoverinfo='text+y'
-            ))
+            # Sicherstellen, dass label existiert
+            if label in df_top_density.columns and label in df_top_counts.columns:
+                tf_values = [
+                    f"TF: {df_top_counts.at[term, label]}" if term in df_top_counts.index else "TF: 0"
+                    for term in top_terms
+                ]
+                y_values = [
+                    df_top_density.at[term, label] if term in df_top_density.index else 0
+                    for term in top_terms
+                ]
+
+                fig.add_trace(go.Scatter(
+                    x=top_terms,
+                    y=y_values,
+                    mode='lines+markers',
+                    name=label,
+                    text=tf_values,
+                    hoverinfo='text+y'
+                ))
+
         fig.update_layout(
-            height=500, width=1600,
-            xaxis=dict(title="Top 50 Begriffe", tickangle=45),
+            height=500,
+            width=1600,
+            xaxis=dict(title="Top 50 Begriffe (nach durchschnittlicher Keyworddichte)", tickangle=45),
             yaxis=dict(title="Keyworddichte (%)"),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             margin=dict(l=40, r=40, t=40, b=100),
         )
+
         st.plotly_chart(fig, use_container_width=True)
 
         st.subheader("🏅 Top-20 Begriffe je Text")
