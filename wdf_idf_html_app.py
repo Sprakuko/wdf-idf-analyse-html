@@ -9,10 +9,8 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="HTML & WDF*IDF Analyse", layout="wide")
 st.title("🔍 HTML- und WDF*IDF-Analyse im Vergleich")
 
-# ==== Abschnitt 1: HTML HEADINGS ====
+# Abschnitt 1: HTML Input
 st.header("1️⃣ HTML Heading Checker")
-st.markdown("Bitte gib für jeden Quelltext eine URL und den vollständigen HTML-Code ein.")
-
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     url1 = st.text_input("🌐 URL zu deinem HTML")
@@ -56,11 +54,10 @@ if st.button("🔍 Analysieren"):
                     style = "background-color: #ffcdd2"
             styles.append(style)
         headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
-                body = soup.body
-        if body:
-            body_soup = body
-        else:
-            body_soup = soup  # fallback
+
+        body = soup.body
+        body_soup = body if body else soup  # robust fallback
+
         texts = [tag.get_text(" ", strip=True) for tag in body_soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6"])]
         body_text = " ".join(texts)
         return headings_text, styles, meta_title, meta_description, body_text
@@ -101,8 +98,7 @@ if st.button("🔍 Analysieren"):
         styled_df = pd.DataFrame(rows, columns=heading_data.keys())
         st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
-        # ==== Abschnitt 2: WDF*IDF Analyse (mit robuster Tokenisierung) ====
-
+        # Abschnitt 2: WDF*IDF Analyse
         stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
         der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
         einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
@@ -115,7 +111,6 @@ if st.button("🔍 Analysieren"):
         welcher, welches, wenn, wer, werde, werden, werdet, weshalb, wie, wieder, will, wir,
         wird, wirst, wo, wollen, wollte, würde, würden, zu, zum, zur, über"""
         stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
-
         if custom_stops:
             user_stops = set(w.strip().lower() for w in custom_stops.split(",") if w.strip())
             stopwords.update(user_stops)
@@ -124,7 +119,6 @@ if st.button("🔍 Analysieren"):
         raw_texts = [t for _, t in text_bodies if t.strip()]
         raw_word_counts = [len(re.findall(r"\b\w+\b", t)) for t in raw_texts]
 
-        # Neue, robustere clean_text Funktion
         def clean_text(text, stopwords):
             tokens = re.findall(r'\b[\wäöüß]+\b', text.lower(), flags=re.UNICODE)
             return " ".join([w for w in tokens if w not in stopwords])
@@ -135,7 +129,6 @@ if st.button("🔍 Analysieren"):
         vectorizer = CountVectorizer()
         matrix = vectorizer.fit_transform(cleaned_texts)
         terms = vectorizer.get_feature_names_out()
-
         df_counts = pd.DataFrame(matrix.toarray(), columns=terms, index=urls).T
         df_density = df_counts.copy()
         for i, label in enumerate(urls):
@@ -147,7 +140,7 @@ if st.button("🔍 Analysieren"):
         df_top_counts = df_counts.loc[top_terms]
         avg_top = df_top_density.mean(axis=1)
 
-        st.subheader("📊 Interaktives Diagramm: Balken = Durchschnitt, Linien = Keyworddichte, Hover = Termfrequenz")
+        st.subheader("📊 Interaktives Diagramm")
         fig = go.Figure()
         fig.add_trace(go.Bar(x=top_terms, y=avg_top, name="Durchschnitt", marker_color="lightgray"))
         for label in urls:
@@ -160,28 +153,23 @@ if st.button("🔍 Analysieren"):
                 hoverinfo='text+y'
             ))
         fig.update_layout(
-            height=500,
-            width=1600,
-            xaxis=dict(title="Top 50 Begriffe (nach durchschnittlicher Keyworddichte)", tickangle=45),
+            height=500, width=1600,
+            xaxis=dict(title="Top 50 Begriffe", tickangle=45),
             yaxis=dict(title="Keyworddichte (%)"),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             margin=dict(l=40, r=40, t=40, b=100),
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        st.subheader("🏅 Top-20 Begriffe je Text (mit KD + TF)")
+        st.subheader("🏅 Top-20 Begriffe je Text")
         top_table = pd.DataFrame(index=range(1, 21))
         for i, url in enumerate(urls):
             top_words = df_density[url].sort_values(ascending=False).head(20)
-            formatted = [
-                f"{term} (KD: {round(df_density[url][term], 2)}%, TF: {df_counts[url][term]})"
-                for term in top_words.index
-            ]
+            formatted = [f"{term} (KD: {df_density[url][term]}%, TF: {df_counts[url][term]})" for term in top_words.index]
             st.markdown(f"**{url}** – Länge: {raw_word_counts[i]} Wörter (bereinigt: {clean_word_counts[i]})")
             top_table[url] = formatted
         st.dataframe(top_table)
 
-                # 📍 Drittelverteilung der Begriffe
         st.subheader("📍 Drittelverteilung der Begriffe")
 
         def split_counts(cleaned_text, terms):
