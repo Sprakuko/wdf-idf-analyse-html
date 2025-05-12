@@ -103,17 +103,20 @@ if st.button("🔍 Analysieren"):
         st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
         # ==== Abschnitt 2: WDF*IDF Analyse ====
-        stopwords = set("""aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
-            der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
-            einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
-            habe, haben, hat, hier, hin, hinter, ich, ihm, ihn, ihnen, ihr, ihre, im, in,
-            ist, jede, jedem, jeden, jeder, jedes, jener, jenes, jetzt, kann, kein, keine,
-            keinem, keinen, keiner, keines, mich, mir, mit, muss, müssen, nach, nein, nicht,
-            nichts, noch, nun, nur, ob, oder, ohne, sehr, sein, seine, seinem, seinen, seiner,
-            seines, sie, sind, so, soll, sollen, sollte, sonst, um, und, uns, unser, unter,
-            viel, vom, von, vor, war, waren, warst, was, weiter, welche, welchem, welchen,
-            welcher, welches, wenn, wer, werde, werden, werdet, weshalb, wie, wieder, will, wir,
-            wird, wirst, wo, wollen, wollte, würde, würden, zu, zum, zur, über""".replace("\n", "").split(", "))
+        stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
+        der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
+        einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
+        habe, haben, hat, hier, hin, hinter, ich, ihm, ihn, ihnen, ihr, ihre, im, in,
+        ist, jede, jedem, jeden, jeder, jedes, jener, jenes, jetzt, kann, kein, keine,
+        keinem, keinen, keiner, keines, mich, mir, mit, muss, müssen, nach, nein, nicht,
+        nichts, noch, nun, nur, ob, oder, ohne, sehr, sein, seine, seinem, seinen, seiner,
+        seines, sie, sind, so, soll, sollen, sollte, sonst, um, und, uns, unser, unter,
+        viel, vom, von, vor, war, waren, warst, was, weiter, welche, welchem, welchen,
+        welcher, welches, wenn, wer, werde, werden, werdet, weshalb, wie, wieder, will, wir,
+        wird, wirst, wo, wollen, wollte, würde, würden, zu, zum, zur, über"""
+
+# Robust aufteilen – unabhängig von Komma + Leerzeichen
+stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
 
         if custom_stops:
             user_stops = set(w.strip().lower() for w in custom_stops.split(",") if w.strip())
