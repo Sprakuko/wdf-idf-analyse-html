@@ -148,7 +148,7 @@ if st.button("🔍 Analysieren"):
             df_counts = pd.DataFrame(matrix.toarray(), columns=terms, index=urls).T
             df_density = df_counts.copy()
             for i, label in enumerate(urls):
-                df_density[label] = (df_counts[label] / word_counts[i] * 100).round(2)
+            df_density[label] = (df_counts[label] / clean_word_counts[i] * 100).round(2)
 
             df_avg = df_density.mean(axis=1)
             top_terms = df_avg.sort_values(ascending=False).head(50).index
@@ -183,7 +183,7 @@ if st.button("🔍 Analysieren"):
             for i, url in enumerate(urls):
                 top_words = df_density[url].sort_values(ascending=False).head(20)
                 formatted = [f"{term} (KD: {round(df_density[url][term], 2)}%, TF: {df_counts[url][term]})" for term in top_words.index]
-                st.markdown(f"**{url}** – Länge: {word_counts[i]} Wörter")
+                st.markdown(f"**{url}** – Länge: {raw_word_counts[i]} Wörter (bereinigt: {clean_word_counts[i]})")
                 top_table[url] = formatted
             st.dataframe(top_table)
 
