@@ -102,9 +102,8 @@ if st.button("🔍 Analysieren"):
         styled_df = pd.DataFrame(rows, columns=heading_data.keys())
         st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
-           # ==== Abschnitt 2: WDF*IDF Analyse ====
+                   # ==== Abschnitt 2: WDF*IDF Analyse (mit robuster Tokenisierung) ====
 
-        # Robust aufbereitete Stoppwortliste
         stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
         der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
         einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
@@ -116,10 +115,8 @@ if st.button("🔍 Analysieren"):
         viel, vom, von, vor, war, waren, warst, was, weiter, welche, welchem, welchen,
         welcher, welches, wenn, wer, werde, werden, werdet, weshalb, wie, wieder, will, wir,
         wird, wirst, wo, wollen, wollte, würde, würden, zu, zum, zur, über"""
-
         stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
 
-        # Optional: eigene Stoppwörter hinzufügen
         if custom_stops:
             user_stops = set(w.strip().lower() for w in custom_stops.split(",") if w.strip())
             stopwords.update(user_stops)
@@ -128,8 +125,9 @@ if st.button("🔍 Analysieren"):
         raw_texts = [t for _, t in text_bodies if t.strip()]
         raw_word_counts = [len(re.findall(r"\b\w+\b", t)) for t in raw_texts]
 
+        # Neue, robustere clean_text Funktion
         def clean_text(text, stopwords):
-            tokens = re.findall(r'\b[a-zäöüß]+\b', text.lower())
+            tokens = re.findall(r'\b[\wäöüß]+\b', text.lower(), flags=re.UNICODE)
             return " ".join([w for w in tokens if w not in stopwords])
 
         cleaned_texts = [clean_text(t, stopwords) for t in raw_texts]
@@ -139,10 +137,16 @@ if st.button("🔍 Analysieren"):
         matrix = vectorizer.fit_transform(cleaned_texts)
         terms = vectorizer.get_feature_names_out()
 
-        # Debug: Welche Begriffe sollten gefiltert sein, sind es aber nicht?
-        suspicious_terms = [t for t in terms if t in stopwords]
-        if suspicious_terms:
-            st.warning(f"⚠️ Diese Begriffe wurden trotz Filterung erkannt: {', '.join(suspicious_terms)}")
+        # Optionaler Check
+        if "surfcamps" in terms:
+            st.success("✅ 'surfcamps' wurde erfolgreich erkannt und gezählt.")
+        else:
+            st.error("❌ 'surfcamps' wurde nicht erkannt – bitte prüfen!")
+
+        # Alle surf-Begriffe
+        surf_terms = [term for term in terms if "surf" in term]
+        st.markdown("### 🔎 Begriffe mit 'surf'")
+        st.write(surf_terms)
 
         df_counts = pd.DataFrame(matrix.toarray(), columns=terms, index=urls).T
         df_density = df_counts.copy()
@@ -155,7 +159,6 @@ if st.button("🔍 Analysieren"):
         df_top_counts = df_counts.loc[top_terms]
         avg_top = df_top_density.mean(axis=1)
 
-        # 📊 Diagramm
         st.subheader("📊 Interaktives Diagramm: Balken = Durchschnitt, Linien = Keyworddichte, Hover = Termfrequenz")
         fig = go.Figure()
         fig.add_trace(go.Bar(x=top_terms, y=avg_top, name="Durchschnitt", marker_color="lightgray"))
@@ -178,7 +181,6 @@ if st.button("🔍 Analysieren"):
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # 🏅 Top-20 Begriffe
         st.subheader("🏅 Top-20 Begriffe je Text (mit KD + TF)")
         top_table = pd.DataFrame(index=range(1, 21))
         for i, url in enumerate(urls):
@@ -191,7 +193,6 @@ if st.button("🔍 Analysieren"):
             top_table[url] = formatted
         st.dataframe(top_table)
 
-        # 📍 Drittelverteilung
         st.subheader("📍 Drittelverteilung der Begriffe")
         def split_counts(cleaned_text, terms):
             words = cleaned_text.split()
@@ -212,7 +213,6 @@ if st.button("🔍 Analysieren"):
             styled = df_split.style.apply(highlight_max_nonzero, axis=0)
             st.dataframe(styled)
 
-        # 📘 Unique Terms Matrix
         st.subheader("📘 Vergleichsmatrix: Unique Terms pro Text")
         unique_matrix = pd.DataFrame(index=top_terms, columns=urls)
 
