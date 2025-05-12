@@ -39,6 +39,7 @@ if st.button("🔍 Analysieren"):
         meta_title = soup.title.string if soup.title else ""
         meta_description = soup.find("meta", attrs={"name": "description"})
         meta_description = meta_description["content"] if meta_description else ""
+
         headings = []
         for tag in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
             headings.append((int(tag.name[1]), f"{tag.name.upper()}: {tag.get_text(strip=True)}", tag.name.lower()))
@@ -62,8 +63,21 @@ if st.button("🔍 Analysieren"):
             styles.append(style)
 
         headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
-        body_text = soup.body.get_text(" ", strip=True) if soup.body else ""
-        return headings_text, styles, soup.title.string if soup.title else "", meta_description, body_text
+
+        # Nur Text zwischen </header> und </main>
+        raw = str(soup)
+        try:
+            content = raw.split("</header>", 1)[1].split("</main>", 1)[0]
+            body_soup = BeautifulSoup(content, "html.parser")
+            texts = []
+            for tag in body_soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6"]):
+                if tag.name == "p" or tag.name.startswith("h"):
+                    texts.append(tag.get_text(" ", strip=True))
+            body_text = " ".join(texts)
+        except:
+            body_text = ""
+
+        return headings_text, styles, meta_title, meta_description, body_text
 
     if len(valid_inputs) < 2:
         st.warning("Bitte gib mindestens zwei vollständige HTML-Quelltexte und ihre zugehörigen URLs ein.")
