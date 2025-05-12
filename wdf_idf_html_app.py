@@ -46,7 +46,7 @@ def parse_html_structure(html):
         current_level = headings[i][0]
         prev_level = headings[i - 1][0] if i > 0 else current_level
         if current_level > prev_level + 1:
-            styles.append("🔴")
+            styles.append("background-color: #ffcdd2")
         else:
             styles.append("")
 
@@ -66,13 +66,13 @@ else:
     error_marks = {}
 
     for url, html in valid_inputs:
-        h1, title, desc, headings, errors = parse_html_structure(html)
+        h1, title, desc, headings, styles = parse_html_structure(html)
         urls.append(url)
         h1_list.append(h1)
         title_list.append(title)
         desc_list.append(desc)
         headings_dict[url] = headings
-        error_marks[url] = errors
+        error_marks[url] = styles
 
     # Meta-Infos anzeigen
     meta_df = pd.DataFrame({
@@ -87,15 +87,18 @@ else:
     # Überschriftenvergleich nebeneinander
     st.subheader("📑 Überschriftenstruktur im Vergleich (Reihenfolge & Hierarchiefehler)")
     max_len = max(len(v) for v in headings_dict.values())
-    rows = []
+    styled_rows = []
     for i in range(max_len):
         row = []
         for url in urls:
             heading = headings_dict[url][i] if i < len(headings_dict[url]) else ""
-            error = error_marks[url][i] if i < len(error_marks[url]) else ""
-            cell = f"{heading} {error}" if heading else ""
+            style = error_marks[url][i] if i < len(error_marks[url]) else ""
+            if heading:
+                cell = f"<div style='{style}; padding:4px'>{heading}</div>"
+            else:
+                cell = ""
             row.append(cell)
-        rows.append(row)
+        styled_rows.append(row)
 
-    table_df = pd.DataFrame(rows, columns=urls)
-    st.dataframe(table_df)
+    styled_df = pd.DataFrame(styled_rows, columns=urls)
+    st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
