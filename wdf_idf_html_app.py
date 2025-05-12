@@ -137,7 +137,8 @@ if st.button("🔍 Analysieren"):
         texts = [t for _, t in text_bodies if t.strip()]
         urls = [u for u, t in text_bodies if t.strip()]
         cleaned = [" ".join([w for w in t.lower().split() if w.isalpha() and w not in stopwords]) for t in texts]
-        word_counts = [len(t.split()) for t in cleaned]
+       import re
+word_counts = [len(re.findall(r'\b\w+\b', t)) for t in texts]
 
         if len(texts) < 2:
             st.warning("Bitte gib mindestens zwei Texte ein, um die Analyse durchzuführen.")
