@@ -1,124 +1,64 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.feature_extraction.text import CountVectorizer
 from bs4 import BeautifulSoup
-import plotly.graph_objects as go
-import difflib
 
-st.set_page_config(page_title="WDF*IDF HTML Analyse", layout="wide")
-st.title("🔍 WDF*IDF + Headline-Vergleich (aus HTML-Quelltexten)")
+st.set_page_config(page_title="HTML Heading Check", layout="wide")
+st.title("📋 H-Tags & Meta-Daten Analyse")
 
-main_html = st.text_area("📝 HTML-Quelltext deines Textes", height=200)
-main_url = st.text_input("🌐 URL zu deinem Text")
+col1, col2, col3, col4 = st.columns(4)
+html1 = col1.text_area("🔍 Quelltext – Dein HTML", height=300)
+html2 = col2.text_area("Vergleichstext 1", height=300)
+html3 = col3.text_area("Vergleichstext 2", height=300)
+html4 = col4.text_area("Vergleichstext 3", height=300)
 
-col1, col2, col3 = st.columns(3)
-comp1 = col1.text_area("HTML-Vergleichstext 1", height=150)
-url1 = col1.text_input("URL Vergleich 1")
-comp2 = col2.text_area("HTML-Vergleichstext 2", height=150)
-url2 = col2.text_input("URL Vergleich 2")
-comp3 = col3.text_area("HTML-Vergleichstext 3", height=150)
-url3 = col3.text_input("URL Vergleich 3")
+html_list = [html1, html2, html3, html4]
+labels = ["Dein HTML", "Vergleich 1", "Vergleich 2", "Vergleich 3"]
 
-texts_raw = [main_html, comp1, comp2, comp3]
-urls = [main_url, url1, url2, url3]
-texts_raw = [t for t in texts_raw if t.strip()]
-urls = [u for u in urls if u.strip()]
-
-stopwords = set([
-    "aber", "alle", "als", "am", "an", "auch", "auf", "aus", "bei", "bin", "bis", "bist", "da", "damit", "dann",
-    "der", "die", "das", "dass", "deren", "dessen", "dem", "den", "denn", "dich", "dir", "du", "ein", "eine",
-    "einem", "einen", "einer", "eines", "er", "es", "etwas", "euer", "eure", "für", "gegen", "gehabt", "hab",
-    "habe", "haben", "hat", "hier", "hin", "hinter", "ich", "ihm", "ihn", "ihnen", "ihr", "ihre", "im", "in",
-    "ist", "jede", "jedem", "jeden", "jeder", "jedes", "jener", "jenes", "jetzt", "kann", "kein", "keine",
-    "keinem", "keinen", "keiner", "keines", "mich", "mir", "mit", "muss", "müssen", "nach", "nein", "nicht",
-    "nichts", "noch", "nun", "nur", "ob", "oder", "ohne", "sehr", "sein", "seine", "seinem", "seinen", "seiner",
-    "seines", "sie", "sind", "so", "soll", "sollen", "sollte", "sonst", "um", "und", "uns", "unser", "unter",
-    "viel", "vom", "von", "vor", "war", "waren", "warst", "was", "weiter", "welche", "welchem", "welchen",
-    "welcher", "welches", "wenn", "wer", "werde", "werden", "werdet", "weshalb", "wie", "wieder", "will", "wir",
-    "wird", "wirst", "wo", "wollen", "wollte", "würde", "würden", "zu", "zum", "zur", "über"
-])
-
-def extract_text_and_headings(html):
+# Funktion zum Parsen von HTML und Ausgabe der H-Tags inkl. Hierarchiekontrolle
+def parse_html_structure(html):
     soup = BeautifulSoup(html, "html.parser")
-    text = soup.get_text(separator=" ")
+    meta_title = soup.title.string if soup.title else ""
+    meta_description = soup.find("meta", attrs={"name": "description"})
+    meta_description = meta_description["content"] if meta_description else ""
+    h1_tag = soup.find("h1")
+    h1_text = h1_tag.get_text(strip=True) if h1_tag else ""
+
     headings = []
-    for tag in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):  # in Reihenfolge
-        content = tag.get_text(separator=" ", strip=True)
-        if content:
-            headings.append(f"{tag.name.upper()}: {content}")
-    return text, headings
+    for tag in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
+        headings.append((int(tag.name[1]), f"{tag.name.upper()}: {tag.get_text(strip=True)}"))
 
-def clean(text):
-    return " ".join([w for w in text.lower().split() if w.isalpha() and w not in stopwords])
-
-if st.button("🔍 Analyse starten"):
-    if len(texts_raw) < 2 or len(urls) < 2:
-        st.warning("Bitte gib mindestens zwei HTML-Quelltexte mit zugehörigen URLs ein.")
-    else:
-        texts = []
-        headings_list = []
-        for html in texts_raw:
-            plain_text, headings = extract_text_and_headings(html)
-            texts.append(plain_text)
-            headings_list.append(headings)
-
-        st.subheader("📚 Headline-Strukturvergleich (in Seiten-Reihenfolge)")
-        max_len = max(len(h) for h in headings_list)
-        for h in headings_list:
-            h.extend([""] * (max_len - len(h)))
-        df_headings = pd.DataFrame({urls[i]: headings_list[i] for i in range(len(urls))})
-        st.dataframe(df_headings)
-
-        st.subheader("🎯 Semantisch ähnliche Überschriften")
-        all_h = [h for sublist in headings_list for h in sublist]
-        matches = set()
-        for term in all_h:
-            for other in all_h:
-                if term != other and difflib.SequenceMatcher(None, term, other).ratio() > 0.75:
-                    matches.add(term)
-                    matches.add(other)
-        if matches:
-            st.markdown("**Ähnliche Begriffe (aus H-Tags):**")
-            st.markdown(", ".join(sorted(matches)))
+    styles = []
+    for i in range(len(headings)):
+        current_level = headings[i][0]
+        prev_level = headings[i - 1][0] if i > 0 else current_level
+        if current_level > prev_level + 1:
+            styles.append("background-color: #ffcdd2")
         else:
-            st.info("Keine stark ähnlichen Überschriften gefunden.")
+            styles.append("")
 
-        st.subheader("📊 WDF*IDF Analyse")
-        cleaned = [clean(t) for t in texts]
-        word_counts = [len(t.split()) for t in cleaned]
-        vectorizer = CountVectorizer()
-        matrix = vectorizer.fit_transform(cleaned)
-        terms = vectorizer.get_feature_names_out()
-        df_counts = pd.DataFrame(matrix.toarray(), columns=terms, index=urls).T
-        df_density = df_counts.copy()
+    headings_text = [h[1] for h in headings]
+    return h1_text, meta_title, meta_description, headings_text, styles
 
-        for i, label in enumerate(urls):
-            df_density[label] = (df_counts[label] / word_counts[i] * 100).round(2)
+# Auswertung
+for i, html in enumerate(html_list):
+    if html.strip():
+        h1_text, meta_title, meta_desc, headings, styles = parse_html_structure(html)
+        st.markdown(f"### 🧾 {labels[i]}")
+        st.markdown(f"**H1-Titel:** {h1_text}")
+        st.markdown(f"**Meta-Title:** {meta_title}")
+        st.markdown(f"**Meta-Description:** {meta_desc}")
 
-        df_avg = df_density.mean(axis=1)
-        top_terms = df_avg.sort_values(ascending=False).head(50).index
-        df_top_density = df_density.loc[top_terms]
-        df_top_counts = df_counts.loc[top_terms]
-        avg_top = df_top_density.mean(axis=1)
+        df = pd.DataFrame({"Überschriften": headings, "Fehler": ["🔴" if s else "" for s in styles]})
 
-        fig = go.Figure()
-        fig.add_trace(go.Bar(x=top_terms, y=avg_top, name="Durchschnitt", marker_color="lightgray"))
-        for label in urls:
-            fig.add_trace(go.Scatter(
-                x=top_terms,
-                y=df_top_density[label],
-                mode='lines+markers',
-                name=label,
-                text=[f"TF: {df_top_counts[label][term]}" for term in top_terms],
-                hoverinfo='text+y'
-            ))
-        fig.update_layout(
-            height=500,
-            width=1600,
-            xaxis=dict(title="Top 50 Begriffe", tickangle=45),
-            yaxis=dict(title="Keyworddichte (%)"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            margin=dict(l=40, r=40, t=40, b=100),
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        def to_colored_html(df):
+            html = "<table style='border-collapse: collapse; width: 100%;'>"
+            html += "<tr><th style='border: 1px solid #ddd; padding: 8px;'>Fehler</th><th style='border: 1px solid #ddd; padding: 8px;'>Überschrift</th></tr>"
+            for _, row in df.iterrows():
+                bg = " style='background-color: #ffcdd2;'" if row["Fehler"] else ""
+                html += f"<tr{bg}><td style='border: 1px solid #ddd; padding: 8px;'>{row['Fehler']}</td><td style='border: 1px solid #ddd; padding: 8px;'>{row['Überschriften']}</td></tr>"
+            html += "</table>"
+            return html
+
+        st.markdown(to_colored_html(df), unsafe_allow_html=True)
+        st.markdown("---")
