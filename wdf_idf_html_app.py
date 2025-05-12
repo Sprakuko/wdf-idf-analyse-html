@@ -193,7 +193,7 @@ if st.button("🔍 Analysieren"):
             max_val = col[col != 0].max()
             return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
 
-        for i, text in enumerate(raw_texts):
+        for i, text in enumerate(cleaned_texts):
             df_split = split_counts(text, top_terms)
             st.markdown(f"**{urls[i]}**")
             styled = df_split.style.apply(highlight_max_nonzero, axis=0)
