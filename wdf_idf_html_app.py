@@ -118,17 +118,17 @@ if st.button("🔍 Analysieren"):
         st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
         # ==== WDF*IDF ANALYSE ====
-        stopwords = set(["aber", "alle", "als", "am", "an", "auch", "auf", "aus", "bei", "bin", "bis", "bist", "da", "damit", "dann",
-            "der", "die", "das", "dass", "deren", "dessen", "dem", "den", "denn", "dich", "dir", "du", "ein", "eine",
-            "einem", "einen", "einer", "eines", "er", "es", "etwas", "euer", "eure", "für", "gegen", "gehabt", "hab",
-            "habe", "haben", "hat", "hier", "hin", "hinter", "ich", "ihm", "ihn", "ihnen", "ihr", "ihre", "im", "in",
-            "ist", "jede", "jedem", "jeden", "jeder", "jedes", "jener", "jenes", "jetzt", "kann", "kein", "keine",
-            "keinem", "keinen", "keiner", "keines", "mich", "mir", "mit", "muss", "müssen", "nach", "nein", "nicht",
-            "nichts", "noch", "nun", "nur", "ob", "oder", "ohne", "sehr", "sein", "seine", "seinem", "seinen", "seiner",
-            "seines", "sie", "sind", "so", "soll", "sollen", "sollte", "sonst", "um", "und", "uns", "unser", "unter",
-            "viel", "vom", "von", "vor", "war", "waren", "warst", "was", "weiter", "welche", "welchem", "welchen",
-            "welcher", "welches", "wenn", "wer", "werde", "werden", "werdet", "weshalb", "wie", "wieder", "will", "wir",
-            "wird", "wirst", "wo", "wollen", "wollte", "würde", "würden", "zu", "zum", "zur", "über"])
+        stopwords = set("""aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
+            der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
+            einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
+            habe, haben, hat, hier, hin, hinter, ich, ihm, ihn, ihnen, ihr, ihre, im, in,
+            ist, jede, jedem, jeden, jeder, jedes, jener, jenes, jetzt, kann, kein, keine,
+            keinem, keinen, keiner, keines, mich, mir, mit, muss, müssen, nach, nein, nicht,
+            nichts, noch, nun, nur, ob, oder, ohne, sehr, sein, seine, seinem, seinen, seiner,
+            seines, sie, sind, so, soll, sollen, sollte, sonst, um, und, uns, unser, unter,
+            viel, vom, von, vor, war, waren, warst, was, weiter, welche, welchem, welchen,
+            welcher, welches, wenn, wer, werde, werden, werdet, weshalb, wie, wieder, will, wir,
+            wird, wirst, wo, wollen, wollte, würde, würden, zu, zum, zur, über""".replace("\n", "").split(", "))
 
         if custom_stops:
             user_stops = set(w.strip().lower() for w in custom_stops.split(",") if w.strip())
@@ -137,8 +137,7 @@ if st.button("🔍 Analysieren"):
         texts = [t for _, t in text_bodies if t.strip()]
         urls = [u for u, t in text_bodies if t.strip()]
         cleaned = [" ".join([w for w in t.lower().split() if w.isalpha() and w not in stopwords]) for t in texts]
-       import re
-word_counts = [len(re.findall(r'\b\w+\b', t)) for t in texts]
+        word_counts = [len(re.findall(r"\b\w+\b", t)) for t in texts]
 
         if len(texts) < 2:
             st.warning("Bitte gib mindestens zwei Texte ein, um die Analyse durchzuführen.")
