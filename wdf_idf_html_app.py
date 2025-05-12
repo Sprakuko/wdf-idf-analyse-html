@@ -117,8 +117,7 @@ if st.button("🔍 Analysieren"):
         styled_df = pd.DataFrame(rows, columns=heading_data.keys())
         st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
-        st.header("2️⃣ WDF*IDF-Termanalyse")
-
+        # Vorbereitung der WDF*IDF-Texte
         stopwords = set("""aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
             der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
             einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
@@ -135,69 +134,63 @@ if st.button("🔍 Analysieren"):
             user_stops = set(w.strip().lower() for w in custom_stops.split(",") if w.strip())
             stopwords.update(user_stops)
 
-        raw_texts = [(url, text) for url, text in text_bodies if text.strip()]
+        urls = [u for u, t in text_bodies if t.strip()]
+        texts = [t for u, t in text_bodies if t.strip()]
+        word_counts = [len(re.findall(r'\b\w+\b', text)) for text in texts]
 
-        if len(raw_texts) < 2:
-            st.warning("Mindestens zwei gültige HTML-Quelltexte mit sichtbarem Inhalt erforderlich für die Termanalyse.")
-        else:
-            urls = [u for u, _ in raw_texts]
-            texts = [t for _, t in raw_texts]
-            vectorizer = CountVectorizer()
-            X = vectorizer.fit_transform(texts)
-            terms = vectorizer.get_feature_names_out()
-            freqs = X.toarray()
+        vectorizer = CountVectorizer()
+        X = vectorizer.fit_transform(texts)
+        terms = vectorizer.get_feature_names_out()
+        freqs = X.toarray()
 
-            word_counts = [len(re.findall(r'\b\w+\b', text)) for text in texts]
+        st.subheader("📊 Interaktives Vergleichsdiagramm")
+        avg_density = np.mean(freqs / np.array(word_counts)[:, None] * 100, axis=0)
+        fig = go.Figure()
+        fig.add_trace(go.Bar(x=terms, y=avg_density, name="Durchschnitt KD (%)"))
+        for i, url in enumerate(urls):
+            fig.add_trace(go.Scatter(x=terms, y=freqs[i]/word_counts[i]*100, mode='lines+markers', name=url,
+                                     text=[f"TF: {v}" for v in freqs[i]]))
+        fig.update_layout(xaxis_title="Term", yaxis_title="Keyworddichte (%)", hovermode="x unified")
+        st.markdown("🧠 Balken = Durchschnittliche KD über alle Texte, Linien = KD je Text. Hover zeigt Termfrequenz.")
+        st.plotly_chart(fig, use_container_width=True)
 
-            st.subheader("📊 Interaktives Vergleichsdiagramm")
-            avg_density = np.mean(freqs / np.array(word_counts)[:, None] * 100, axis=0)
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=terms, y=avg_density, name="Durchschnitt KD (%)"))
-            for i, url in enumerate(urls):
-                fig.add_trace(go.Scatter(x=terms, y=freqs[i]/word_counts[i]*100, mode='lines+markers', name=url,
-                                         text=[f"TF: {v}" for v in freqs[i]]))
-            fig.update_layout(xaxis_title="Term", yaxis_title="Keyworddichte (%)", hovermode="x unified")
-            st.markdown("🧠 Balken = Durchschnittliche KD über alle Texte, Linien = KD je Text. Hover zeigt Termfrequenz.")
-            st.plotly_chart(fig, use_container_width=True)
+        st.subheader("🏅 Top-20 Begriffe je Text (mit KD + TF)")
+        top_table = pd.DataFrame(index=range(1, 21))
+        df_density = {urls[i]: pd.Series(freqs[i] / word_counts[i] * 100, index=terms) for i in range(len(urls))}
+        df_counts = {urls[i]: pd.Series(freqs[i], index=terms) for i in range(len(urls))}
+        max_kd = {}
+        for term in terms:
+            max_kd[term] = max(df_density[url].get(term, 0) for url in urls)
 
-            st.subheader("🏅 Top-20 Begriffe je Text (mit KD + TF)")
-            top_table = pd.DataFrame(index=range(1, 21))
-            df_density = {urls[i]: pd.Series(freqs[i] / word_counts[i] * 100, index=terms) for i in range(len(urls))}
-            df_counts = {urls[i]: pd.Series(freqs[i], index=terms) for i in range(len(urls))}
-            max_kd = {}
-            for term in terms:
-                max_kd[term] = max(df_density[url].get(term, 0) for url in urls)
+        for i, url in enumerate(urls):
+            top_words = df_density[url].sort_values(ascending=False).head(20)
+            formatted = []
+            for term in top_words.index:
+                value = round(df_density[url][term], 2)
+                tf = df_counts[url][term]
+                formatted.append(f"{term} (KD: {value}%, TF: {tf})")
+            st.markdown(f"**{url}** – Länge: {word_counts[i]} Wörter")
+            top_table[url] = formatted
+        st.dataframe(top_table)
 
-            for i, url in enumerate(urls):
-                top_words = df_density[url].sort_values(ascending=False).head(20)
-                formatted = []
-                for term in top_words.index:
-                    value = round(df_density[url][term], 2)
-                    tf = df_counts[url][term]
-                    highlight = " 🟩" if value == round(max_kd[term], 2) and value > 0 else ""
-                    formatted.append(f"{term} (KD: {value}%, TF: {tf}){highlight}")
-                st.markdown(f"**{url}** – Länge: {word_counts[i]} Wörter")
-                top_table[url] = formatted
-            st.dataframe(top_table)
+        st.subheader("📍 Drittelverteilung der Begriffe")
+        top_terms = list(set([t.split(" ")[0] for l in top_table.values.tolist() for t in l if t]))
 
-            st.subheader("📍 Drittelverteilung der Begriffe")
-            top_terms = list(set([t.split(" ")[0] for l in top_table.values.tolist() for t in l if t]))
+        def split_counts(text, terms):
+            words = [w for w in re.findall(r'\b\w+\b', text.lower()) if w not in stopwords]
+            thirds = np.array_split(words, 3)
+            result = []
+            for part in thirds:
+                count = pd.Series(part).value_counts()
+                result.append([count.get(term, 0) for term in terms])
+            return pd.DataFrame(result, index=["Anfang", "Mitte", "Ende"], columns=terms)
 
-            def split_counts(text, terms):
-                words = [w for w in re.findall(r'\b\w+\b', text.lower()) if w not in stopwords]
-                thirds = np.array_split(words, 3)
-                result = []
-                for part in thirds:
-                    count = pd.Series(part).value_counts()
-                    result.append([count.get(term, 0) for term in terms])
-                return pd.DataFrame(result, index=["Anfang", "Mitte", "Ende"], columns=terms)
+        def highlight_max_nonzero(col):
+            max_val = col[col != 0].max()
+            return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
 
-            def highlight_max_nonzero(col):
-                max_val = col[col != 0].max()
-                return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
-
-            for i, raw in enumerate(texts[:len(urls)]):
-                df_split = split_counts(raw, top_terms)
-                st.markdown(f"**{urls[i]}**")
-                styled = df_split.style.apply(highlight_max_nonzero, axis=0)
-                st.dataframe(styled)
+        for i, raw in enumerate(texts[:len(urls)]):
+            df_split = split_counts(raw, top_terms)
+            st.markdown(f"**{urls[i]}**")
+            styled = df_split.style.apply(highlight_max_nonzero, axis=0)
+            st.dataframe(styled)
