@@ -102,7 +102,7 @@ if st.button("🔍 Analysieren"):
         styled_df = pd.DataFrame(rows, columns=heading_data.keys())
         st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
-                   # ==== Abschnitt 2: WDF*IDF Analyse (mit robuster Tokenisierung) ====
+        # ==== Abschnitt 2: WDF*IDF Analyse (mit robuster Tokenisierung) ====
 
         stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
         der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
@@ -196,16 +196,7 @@ if st.button("🔍 Analysieren"):
             max_val = col[col != 0].max()
             return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
 
-        for i, text in enumerate(cleaned_texts):
-            df_split = split_counts(text, top_terms)
-            st.markdown(f"**{urls[i]}**")
-            styled = df_split.style.apply(highlight_max_nonzero, axis=0)
-            st.dataframe(styled)
-
-        def highlight_max_nonzero(col):
-            max_val = col[col != 0].max()
-            return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
-
+        st.subheader("📍 Drittelverteilung der Begriffe")
         for i, text in enumerate(cleaned_texts):
             df_split = split_counts(text, top_terms)
             st.markdown(f"**{urls[i]}**")
