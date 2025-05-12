@@ -137,17 +137,6 @@ if st.button("🔍 Analysieren"):
         matrix = vectorizer.fit_transform(cleaned_texts)
         terms = vectorizer.get_feature_names_out()
 
-        # Optionaler Check
-        if "surfcamps" in terms:
-            st.success("✅ 'surfcamps' wurde erfolgreich erkannt und gezählt.")
-        else:
-            st.error("❌ 'surfcamps' wurde nicht erkannt – bitte prüfen!")
-
-        # Alle surf-Begriffe
-        surf_terms = [term for term in terms if "surf" in term]
-        st.markdown("### 🔎 Begriffe mit 'surf'")
-        st.write(surf_terms)
-
         df_counts = pd.DataFrame(matrix.toarray(), columns=terms, index=urls).T
         df_density = df_counts.copy()
         for i, label in enumerate(urls):
@@ -212,19 +201,6 @@ if st.button("🔍 Analysieren"):
             st.markdown(f"**{urls[i]}**")
             styled = df_split.style.apply(highlight_max_nonzero, axis=0)
             st.dataframe(styled)
-
-        st.subheader("📘 Vergleichsmatrix: Unique Terms pro Text")
-        unique_matrix = pd.DataFrame(index=top_terms, columns=urls)
-
-        for term in top_terms:
-            appearances = [df_counts[url][term] > 0 for url in urls]
-            if sum(appearances) == 1:
-                for i, present in enumerate(appearances):
-                    unique_matrix.iloc[top_terms.get_loc(term), i] = "✅" if present else ""
-            else:
-                unique_matrix.loc[term] = ""
-
-        st.dataframe(unique_matrix.fillna(""), use_container_width=True)
 
         def highlight_max_nonzero(col):
             max_val = col[col != 0].max()
