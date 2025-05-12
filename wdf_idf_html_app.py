@@ -229,24 +229,3 @@ if st.button("🔍 Analysieren"):
                 styled = df_split.style.apply(highlight_max_nonzero, axis=0)
                 st.dataframe(styled)
 
-        st.subheader("🔎 Begriff manuell prüfen")
-
-        query_term = st.text_input("🔤 Begriff eingeben (Singular oder Plural)")
-
-        if query_term:
-            query = query_term.lower().strip()
-            st.markdown(f"**Auswertung für:** `{query}`")
-            data = []
-
-            for i, url in enumerate(urls):
-                tf = df_counts.at[query, url] if query in df_counts.index else 0
-                kd = df_density.at[query, url] if query in df_density.index else 0.0
-
-                tf_display = tf if tf > 0 else "nicht vorhanden"
-                kd_display = f"{kd:.2f}%" if tf > 0 else "nicht vorhanden"
-
-                data.append({"URL": url, "TF": tf_display, "Keyworddichte": kd_display})
-
-            df_result = pd.DataFrame(data)
-            st.table(df_result)
-
