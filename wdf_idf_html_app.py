@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import re
 from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import CountVectorizer
 import plotly.graph_objects as go
@@ -29,6 +30,8 @@ with col3:
 with col4:
     url4 = st.text_input("URL Vergleich 3")
     html4 = st.text_area("Vergleich 3", height=300)
+
+custom_stops = st.text_input("➕ Optional: Eigene Stoppwörter (kommagetrennt)")
 
 if st.button("🔍 Analysieren"):
     inputs = [(url1, html1), (url2, html2), (url3, html3), (url4, html4)]
@@ -64,18 +67,16 @@ if st.button("🔍 Analysieren"):
 
         headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
 
-        # Nur Text zwischen </header> und </main>
         raw = str(soup)
         try:
             content = raw.split("</header>", 1)[1].split("</main>", 1)[0]
-            body_soup = BeautifulSoup(content, "html.parser")
-            texts = []
-            for tag in body_soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6"]):
-                if tag.name.startswith("h") or tag.name == "p":
-                    texts.append(tag.get_text(" ", strip=True))
-            body_text = " ".join(texts)
-        except:
-            body_text = ""
+        except IndexError:
+            content = raw
+        body_soup = BeautifulSoup(content, "html.parser")
+        texts = []
+        for tag in body_soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6"]):
+            texts.append(tag.get_text(" ", strip=True))
+        body_text = " ".join(texts)
 
         return headings_text, styles, meta_title, meta_description, body_text
 
@@ -116,49 +117,87 @@ if st.button("🔍 Analysieren"):
         styled_df = pd.DataFrame(rows, columns=heading_data.keys())
         st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
-        # === WDF*IDF Analysis ===
         st.header("2️⃣ WDF*IDF-Termanalyse")
 
-        stopwords = set([...])  # (stopwords wie gehabt)
+        stopwords = set("""aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
+            der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
+            einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
+            habe, haben, hat, hier, hin, hinter, ich, ihm, ihn, ihnen, ihr, ihre, im, in,
+            ist, jede, jedem, jeden, jeder, jedes, jener, jenes, jetzt, kann, kein, keine,
+            keinem, keinen, keiner, keines, mich, mir, mit, muss, müssen, nach, nein, nicht,
+            nichts, noch, nun, nur, ob, oder, ohne, sehr, sein, seine, seinem, seinen, seiner,
+            seines, sie, sind, so, soll, sollen, sollte, sonst, um, und, uns, unser, unter,
+            viel, vom, von, vor, war, waren, warst, was, weiter, welche, welchem, welchen,
+            welcher, welches, wenn, wer, werde, werden, werdet, weshalb, wie, wieder, will, wir,
+            wird, wirst, wo, wollen, wollte, würde, würden, zu, zum, zur, über""".replace("\n", "").split(", "))
 
-        raw_texts = [(url, body) for url, body in text_bodies if body.strip()]
+        if custom_stops:
+            user_stops = set(w.strip().lower() for w in custom_stops.split(",") if w.strip())
+            stopwords.update(user_stops)
+
+        raw_texts = [(url, text) for url, text in text_bodies if text.strip()]
 
         if len(raw_texts) < 2:
             st.warning("Mindestens zwei gültige HTML-Quelltexte mit sichtbarem Inhalt erforderlich für die Termanalyse.")
         else:
+            urls = [u for u, _ in raw_texts]
+            texts = [t for _, t in raw_texts]
             vectorizer = CountVectorizer()
-            corpus = [text for _, text in raw_texts]
-            X = vectorizer.fit_transform(corpus)
+            X = vectorizer.fit_transform(texts)
             terms = vectorizer.get_feature_names_out()
             freqs = X.toarray()
 
-            word_counts = [sum(f) for f in freqs]
+            word_counts = [len(re.findall(r'\b\w+\b', text)) for text in texts]
+
             st.subheader("📊 Interaktives Vergleichsdiagramm")
             avg_density = np.mean(freqs / np.array(word_counts)[:, None] * 100, axis=0)
             fig = go.Figure()
             fig.add_trace(go.Bar(x=terms, y=avg_density, name="Durchschnitt KD (%)"))
-            for i, (url, _) in enumerate(raw_texts):
+            for i, url in enumerate(urls):
                 fig.add_trace(go.Scatter(x=terms, y=freqs[i]/word_counts[i]*100, mode='lines+markers', name=url,
                                          text=[f"TF: {v}" for v in freqs[i]]))
             fig.update_layout(xaxis_title="Term", yaxis_title="Keyworddichte (%)", hovermode="x unified")
+            st.markdown("🧠 Balken = Durchschnittliche KD über alle Texte, Linien = KD je Text. Hover zeigt Termfrequenz.")
             st.plotly_chart(fig, use_container_width=True)
 
-            for i, (url, raw) in enumerate(raw_texts):
-                total_words = word_counts[i]
-                term_freq = freqs[i]
-                keyword_density = [round((count / total_words) * 100, 3) if total_words > 0 else 0 for count in term_freq]
-                df = pd.DataFrame({"Term": terms, "TF": term_freq, "KD (%)": keyword_density})
-                df_clean = df[df["Term"].str.lower().apply(lambda x: x.isalpha() and x not in stopwords)]
-                df_sorted = df_clean.sort_values("TF", ascending=False).head(20)
-                st.subheader(f"🔢 Top-20 Begriffe für {url} – Länge: {total_words} Wörter")
-                st.dataframe(df_sorted.reset_index(drop=True))
+            st.subheader("🏅 Top-20 Begriffe je Text (mit KD + TF)")
+            top_table = pd.DataFrame(index=range(1, 21))
+            df_density = {urls[i]: pd.Series(freqs[i] / word_counts[i] * 100, index=terms) for i in range(len(urls))}
+            df_counts = {urls[i]: pd.Series(freqs[i], index=terms) for i in range(len(urls))}
+            max_kd = {}
+            for term in terms:
+                max_kd[term] = max(df_density[url].get(term, 0) for url in urls)
 
-                # Drittelverteilung
-                split_points = [int(total_words * 0.33), int(total_words * 0.66)]
-                tokens = corpus[i].split()
-                thirds = ["Anfang"] * split_points[0] + ["Mitte"] * (split_points[1] - split_points[0]) + ["Ende"] * (len(tokens) - split_points[1])
-                term_positions = pd.DataFrame({"Token": tokens, "Drittel": thirds})
-                term_positions = term_positions[term_positions["Token"].isin(df_sorted["Term"])]
-                drittelverteilung = term_positions.groupby(["Token", "Drittel"]).size().unstack(fill_value=0)
-                st.markdown("📍 Drittelverteilung der Begriffe")
-                st.dataframe(drittelverteilung)
+            for i, url in enumerate(urls):
+                top_words = df_density[url].sort_values(ascending=False).head(20)
+                formatted = []
+                for term in top_words.index:
+                    value = round(df_density[url][term], 2)
+                    tf = df_counts[url][term]
+                    highlight = " 🟩" if value == round(max_kd[term], 2) and value > 0 else ""
+                    formatted.append(f"{term} (KD: {value}%, TF: {tf}){highlight}")
+                st.markdown(f"**{url}** – Länge: {word_counts[i]} Wörter")
+                top_table[url] = formatted
+            st.dataframe(top_table)
+
+            st.subheader("📍 Drittelverteilung der Begriffe")
+            top_terms = list(set([t.split(" ")[0] for l in top_table.values.tolist() for t in l if t]))
+
+            def split_counts(text, terms):
+                words = [w for w in re.findall(r'\b\w+\b', text.lower()) if w not in stopwords]
+                thirds = np.array_split(words, 3)
+                result = []
+                for part in thirds:
+                    count = pd.Series(part).value_counts()
+                    result.append([count.get(term, 0) for term in terms])
+                return pd.DataFrame(result, index=["Anfang", "Mitte", "Ende"], columns=terms)
+
+            def highlight_max_nonzero(col):
+                max_val = col[col != 0].max()
+                return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
+
+            for i, raw in enumerate(texts[:len(urls)]):
+                df_split = split_counts(raw, top_terms)
+                st.markdown(f"**{urls[i]}**")
+                styled = df_split.style.apply(highlight_max_nonzero, axis=0)
+                st.dataframe(styled)
