@@ -13,11 +13,7 @@ st.title("🔍 HTML- und WDF*IDF-Analyse im Vergleich")
 st.header("1️⃣ HTML Heading Checker")
 st.markdown("Bitte gib für jeden Quelltext eine URL und den vollständigen HTML-Code ein.")
 
-urls = []
-htmls = []
-
 col1, col2, col3, col4 = st.columns(4)
-
 with col1:
     url1 = st.text_input("🌐 URL zu deinem HTML")
     html1 = st.text_area("Quelltext 1", height=300)
@@ -34,6 +30,7 @@ with col4:
 custom_stops = st.text_input("➕ Optional: Eigene Stoppwörter (kommagetrennt)")
 
 if st.button("🔍 Analysieren"):
+
     inputs = [(url1, html1), (url2, html2), (url3, html3), (url4, html4)]
     valid_inputs = [(url, html) for url, html in inputs if url.strip() and html.strip()]
 
@@ -118,6 +115,8 @@ if st.button("🔍 Analysieren"):
         st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
         # ==== WDF*IDF ANALYSE ====
+
+        # Standard-Stoppwörter
         stopwords = set("""aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
             der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
             einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
@@ -136,13 +135,20 @@ if st.button("🔍 Analysieren"):
 
         texts = [t for _, t in text_bodies if t.strip()]
         urls = [u for u, t in text_bodies if t.strip()]
-        
-        # Wortanzahl roh (ungefiltert)
         raw_word_counts = [len(re.findall(r"\b\w+\b", t)) for t in texts]
-        
-        # Bereinigte Texte (ohne Stoppwörter, nur alphabetisch)
-        cleaned = [" ".join([w for w in t.lower().split() if w.isalpha() and w not in stopwords]) for t in texts]
-        clean_word_counts = [len(t.split()) for t in cleaned]  # Bereinigte Wortanzahl
+
+        # Funktion zur Bereinigung
+        def clean_texts(texts, stopwords):
+            cleaned = []
+            clean_word_counts = []
+            for t in texts:
+                words = re.findall(r"\b\w+\b", t.lower())
+                filtered = [w for w in words if w not in stopwords]
+                cleaned.append(" ".join(filtered))
+                clean_word_counts.append(len(filtered))
+            return cleaned, clean_word_counts
+
+        cleaned, clean_word_counts = clean_texts(texts, stopwords)
 
         if len(texts) < 2:
             st.warning("Bitte gib mindestens zwei Texte ein, um die Analyse durchzuführen.")
@@ -152,7 +158,6 @@ if st.button("🔍 Analysieren"):
             terms = vectorizer.get_feature_names_out()
             df_counts = pd.DataFrame(matrix.toarray(), columns=terms, index=urls).T
             df_density = df_counts.copy()
-
             for i, label in enumerate(urls):
                 df_density[label] = (df_counts[label] / clean_word_counts[i] * 100).round(2)
 
@@ -198,7 +203,7 @@ if st.button("🔍 Analysieren"):
 
             st.subheader("📍 Drittelverteilung der Begriffe")
             def split_counts(text, terms):
-                words = [w for w in text.lower().split() if w.isalpha() and w not in stopwords]
+                words = [w for w in re.findall(r"\b\w+\b", text.lower()) if w not in stopwords]
                 thirds = np.array_split(words, 3)
                 result = []
                 for part in thirds:
