@@ -56,12 +56,11 @@ if st.button("🔍 Analysieren"):
                     style = "background-color: #ffcdd2"
             styles.append(style)
         headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
-        raw = str(soup)
-        try:
-            content = raw.split("</header>", 1)[1].split("</main>", 1)[0]
-        except IndexError:
-            content = raw
-        body_soup = BeautifulSoup(content, "html.parser")
+                body = soup.body
+        if body:
+            body_soup = body
+        else:
+            body_soup = soup  # fallback
         texts = [tag.get_text(" ", strip=True) for tag in body_soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6"])]
         body_text = " ".join(texts)
         return headings_text, styles, meta_title, meta_description, body_text
