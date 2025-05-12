@@ -38,18 +38,15 @@ if st.button("🔍 Analysieren"):
         meta_title = soup.title.string if soup.title else ""
         meta_description = soup.find("meta", attrs={"name": "description"})
         meta_description = meta_description["content"] if meta_description else ""
-
         headings = []
         for tag in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
             headings.append((int(tag.name[1]), f"{tag.name.upper()}: {tag.get_text(strip=True)}", tag.name.lower()))
-
         styles = []
         h1_count = 0
         for i in range(len(headings)):
             current_level = headings[i][0]
             tag_name = headings[i][2]
             prev_level = headings[i - 1][0] if i > 0 else current_level
-
             style = ""
             if current_level > prev_level + 1:
                 style = "background-color: #ffcdd2"
@@ -58,9 +55,7 @@ if st.button("🔍 Analysieren"):
                 if i != 0 or h1_count > 1:
                     style = "background-color: #ffcdd2"
             styles.append(style)
-
         headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
-
         raw = str(soup)
         try:
             content = raw.split("</header>", 1)[1].split("</main>", 1)[0]
@@ -69,7 +64,6 @@ if st.button("🔍 Analysieren"):
         body_soup = BeautifulSoup(content, "html.parser")
         texts = [tag.get_text(" ", strip=True) for tag in body_soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6"])]
         body_text = " ".join(texts)
-
         return headings_text, styles, meta_title, meta_description, body_text
 
     if len(valid_inputs) < 2:
@@ -79,17 +73,23 @@ if st.button("🔍 Analysieren"):
         heading_styles = {}
         meta_infos = []
         text_bodies = []
+        show_heading_warning = False
+
         for url, html in valid_inputs:
             headings, styles, meta_title, meta_desc, body_text = parse_html_structure(html)
             heading_data[url] = headings
             heading_styles[url] = styles
-            meta_infos.append({"URL": url, "Meta-Title": meta_title, "Meta-Description": meta_desc})
             text_bodies.append((url, body_text))
+            meta_infos.append({"URL": url, "Meta-Title": meta_title, "Meta-Description": meta_desc})
+            if any(s != "" for s in styles):
+                show_heading_warning = True
 
         st.subheader("🔎 Meta-Informationen")
         st.dataframe(pd.DataFrame(meta_infos))
 
         st.subheader("📑 Überschriftenstruktur im Vergleich")
+        if show_heading_warning:
+            st.info("🔴 Rot markierte Überschriften deuten auf mögliche Fehler hin (z. B. H1-Fehler oder Hierarchiebruch).")
         max_len = max(len(h) for h in heading_data.values())
         rows = []
         for i in range(max_len):
@@ -99,9 +99,10 @@ if st.button("🔍 Analysieren"):
                 style = heading_styles[url][i] if i < len(heading_styles[url]) else ""
                 row.append(f"<div style='{style}; padding:4px'>{text}</div>" if text else "")
             rows.append(row)
-        st.markdown(pd.DataFrame(rows, columns=heading_data.keys()).to_html(escape=False), unsafe_allow_html=True)
+        styled_df = pd.DataFrame(rows, columns=heading_data.keys())
+        st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
-        # ==== WDF*IDF ANALYSE ====
+        # ==== WDF*IDF ====
         stopwords = set("""aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
             der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
             einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
@@ -115,12 +116,18 @@ if st.button("🔍 Analysieren"):
             wird, wirst, wo, wollen, wollte, würde, würden, zu, zum, zur, über""".replace("\n", "").split(", "))
 
         if custom_stops:
-            stopwords.update({w.strip().lower() for w in custom_stops.split(",") if w.strip()})
+            user_stops = set(w.strip().lower() for w in custom_stops.split(",") if w.strip())
+            stopwords.update(user_stops)
 
-        urls = [u for u, t in text_bodies]
-        raw_texts = [t for u, t in text_bodies]
+        urls = [u for u, t in text_bodies if t.strip()]
+        raw_texts = [t for _, t in text_bodies if t.strip()]
         raw_word_counts = [len(re.findall(r"\b\w+\b", t)) for t in raw_texts]
-        cleaned_texts = [" ".join([w for w in t.lower().split() if w.isalpha() and w not in stopwords]) for t in raw_texts]
+
+        def clean_text(text, stopwords):
+            tokens = re.findall(r'\b[a-zäöüß]+\b', text.lower())
+            return " ".join([w for w in tokens if w not in stopwords])
+
+        cleaned_texts = [clean_text(t, stopwords) for t in raw_texts]
         clean_word_counts = [len(t.split()) for t in cleaned_texts]
 
         vectorizer = CountVectorizer()
@@ -163,14 +170,18 @@ if st.button("🔍 Analysieren"):
         top_table = pd.DataFrame(index=range(1, 21))
         for i, url in enumerate(urls):
             top_words = df_density[url].sort_values(ascending=False).head(20)
-            formatted = [f"{term} (KD: {df_density[url][term]}%, TF: {df_counts[url][term]})" for term in top_words.index]
+            formatted = [
+                f"{term} (KD: {round(df_density[url][term], 2)}%, TF: {df_counts[url][term]})"
+                for term in top_words.index
+            ]
             st.markdown(f"**{url}** – Länge: {raw_word_counts[i]} Wörter (bereinigt: {clean_word_counts[i]})")
             top_table[url] = formatted
         st.dataframe(top_table)
 
         st.subheader("📍 Drittelverteilung der Begriffe")
         def split_counts(text, terms):
-            words = [w for w in text.lower().split() if w.isalpha() and w not in stopwords]
+            tokens = re.findall(r'\b[a-zäöüß]+\b', text.lower())
+            words = [w for w in tokens if w not in stopwords]
             thirds = np.array_split(words, 3)
             result = []
             for part in thirds:
@@ -182,7 +193,7 @@ if st.button("🔍 Analysieren"):
             max_val = col[col != 0].max()
             return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
 
-        for i, text in enumerate(cleaned_texts):
+        for i, text in enumerate(raw_texts):
             df_split = split_counts(text, top_terms)
             st.markdown(f"**{urls[i]}**")
             styled = df_split.style.apply(highlight_max_nonzero, axis=0)
