@@ -135,6 +135,11 @@ if st.button("🔍 Analysieren"):
         cleaned_texts = [clean_text(t, stopwords) for t in raw_texts]
         clean_word_counts = [len(t.split()) for t in cleaned_texts]
 
+        # Prüfen, ob alle bereinigten Texte leer sind
+        if all(text.strip() == "" for text in cleaned_texts):
+            st.error("❌ Nach dem Entfernen der Stoppwörter enthalten alle Texte keine auswertbaren Begriffe mehr.")
+            st.stop()
+        
         vectorizer = CountVectorizer()
         matrix = vectorizer.fit_transform(cleaned_texts)
         terms = vectorizer.get_feature_names_out()
