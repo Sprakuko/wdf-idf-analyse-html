@@ -98,7 +98,11 @@ if st.button("🔍 Analysieren"):
 
         df_meta = pd.DataFrame(meta_infos)
         st.markdown("""
-        <div style='overflow-x: auto'>
+        <div style='overflow-x: auto; width: 100%;'>
+            <style>
+                table { width: 100%; border-collapse: collapse; }
+                th, td { padding: 8px 12px; text-align: left; white-space: nowrap; }
+            </style>
             {table}
         </div>
         """.format(table=df_meta.to_html(escape=False, index=False)), unsafe_allow_html=True)
@@ -113,10 +117,14 @@ if st.button("🔍 Analysieren"):
             for url in heading_data:
                 text = heading_data[url][i] if i < len(heading_data[url]) else ""
                 style = heading_styles[url][i] if i < len(heading_styles[url]) else ""
-                row.append(f"<div style='{style}; padding:4px'>{text}</div>" if text else "")
+                row.append(f"<div style='text-align:left; {style}; padding:4px'>{text}</div>" if text else "")
             rows.append(row)
         styled_df = pd.DataFrame(rows, columns=heading_data.keys())
-        st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
+        st.markdown("""
+        <div style='overflow-x:auto;'>
+        {table}
+        </div>
+        """.format(table=styled_df.to_html(escape=False, index=False)), unsafe_allow_html=True)
 
         # Analyse vorbereiten
         stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
