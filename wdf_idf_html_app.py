@@ -96,7 +96,12 @@ if st.button("🔍 Analysieren"):
             info["Meta-Title"] = format_with_length(info["Meta-Title"], 60)
             info["Meta-Description"] = format_with_length(info["Meta-Description"], 160)
 
-        st.dataframe(pd.DataFrame(meta_infos), use_container_width=True)
+        df_meta = pd.DataFrame(meta_infos)
+        st.markdown("""
+        <div style='overflow-x: auto'>
+            {table}
+        </div>
+        """.format(table=df_meta.to_html(escape=False, index=False)), unsafe_allow_html=True)
 
         st.subheader("📑 Überschriftenstruktur im Vergleich")
         if show_heading_warning:
