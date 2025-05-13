@@ -56,8 +56,7 @@ if st.button("🔍 Analysieren"):
         headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
 
         body = soup.body
-        body_soup = body if body else soup  # robust fallback
-
+        body_soup = body if body else soup
         texts = [tag.get_text(" ", strip=True) for tag in body_soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6"])]
         body_text = " ".join(texts)
         return headings_text, styles, meta_title, meta_description, body_text
@@ -88,18 +87,16 @@ if st.button("🔍 Analysieren"):
             length = len(text)
             if length > limit:
                 return f"❗️{text} ({length} Zeichen)"
+            elif length > limit - 20:
+                return f"🟡 {text} ({length} Zeichen)"
             else:
-                return f"{text} ({length} Zeichen)"
+                return f"🟢 {text} ({length} Zeichen)"
 
         for info in meta_infos:
             info["Meta-Title"] = format_with_length(info["Meta-Title"], 60)
             info["Meta-Description"] = format_with_length(info["Meta-Description"], 160)
 
-        df_meta = pd.DataFrame(meta_infos)
-
-        # HTML-Tabelle mit horizontalem Scrollen
-        styled_meta = df_meta.style.set_table_attributes('style="overflow-x:auto; display:block;"')
-        st.markdown(styled_meta.to_html(escape=False), unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(meta_infos), use_container_width=True)
 
         st.subheader("📑 Überschriftenstruktur im Vergleich")
         if show_heading_warning:
@@ -116,7 +113,7 @@ if st.button("🔍 Analysieren"):
         styled_df = pd.DataFrame(rows, columns=heading_data.keys())
         st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
-        # Abschnitt 2: WDF*IDF Analyse
+        # Analyse vorbereiten
         stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
         der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
         einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
@@ -164,25 +161,10 @@ if st.button("🔍 Analysieren"):
         fig.add_trace(go.Bar(x=top_terms, y=avg_top, name="Durchschnitt", marker_color="lightgray"))
 
         for label in urls:
-            # Sicherstellen, dass label existiert
-            if label in df_top_density.columns and label in df_top_counts.columns:
-                tf_values = [
-                    f"TF: {df_top_counts.at[term, label]}" if term in df_top_counts.index else "TF: 0"
-                    for term in top_terms
-                ]
-                y_values = [
-                    df_top_density.at[term, label] if term in df_top_density.index else 0
-                    for term in top_terms
-                ]
-
-                fig.add_trace(go.Scatter(
-                    x=top_terms,
-                    y=y_values,
-                    mode='lines+markers',
-                    name=label,
-                    text=tf_values,
-                    hoverinfo='text+y'
-                ))
+            if label in df_top_density.columns:
+                tf_values = [f"TF: {df_top_counts.at[term, label]}" if term in df_top_counts.index else "TF: 0" for term in top_terms]
+                y_values = [df_top_density.at[term, label] if term in df_top_density.index else 0 for term in top_terms]
+                fig.add_trace(go.Scatter(x=top_terms, y=y_values, mode='lines+markers', name=label, text=tf_values, hoverinfo='text+y'))
 
         fig.update_layout(
             height=500,
@@ -192,27 +174,15 @@ if st.button("🔍 Analysieren"):
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             margin=dict(l=40, r=40, t=40, b=100),
         )
-
         st.plotly_chart(fig, use_container_width=True)
 
         st.subheader("🏅 Top-20 Begriffe je Text (mit KD + TF)")
-
         top_table = pd.DataFrame(index=range(1, 21))
-
-        for i, url in enumerate(df_density.columns):
-            try:
-                top_words = df_density[url].sort_values(ascending=False).head(20)
-                formatted = [
-                    f"{term} (KD: {round(df_density.at[term, url], 2)}%, TF: {df_counts.at[term, url]})"
-                    for term in top_words.index
-                ]
-                raw_len = raw_word_counts[i] if i < len(raw_word_counts) else "?"
-                clean_len = clean_word_counts[i] if i < len(clean_word_counts) else "?"
-                st.markdown(f"**{url}** – Länge: {raw_len} Wörter (bereinigt: {clean_len})")
-                top_table[url] = formatted
-            except KeyError:
-                st.warning(f"⚠️ Daten für {url} nicht verfügbar.")
-
+        for i, url in enumerate(urls):
+            top_words = df_density[url].sort_values(ascending=False).head(20)
+            formatted = [f"{term} (KD: {round(df_density.at[term, url], 2)}%, TF: {df_counts.at[term, url]})" for term in top_words.index]
+            st.markdown(f"**{url}** – Länge: {raw_word_counts[i]} Wörter (bereinigt: {clean_word_counts[i]})")
+            top_table[url] = formatted
         st.dataframe(top_table)
 
         st.subheader("📍 Drittelverteilung der Begriffe")
@@ -230,20 +200,8 @@ if st.button("🔍 Analysieren"):
             max_val = col[col != 0].max()
             return ['background-color: #a7ecff' if val == max_val and val != 0 else '' for val in col]
 
-        for i in range(len(cleaned_texts)):
-            url = df_density.columns[i] if i < len(df_density.columns) else f"Text {i+1}"
-            text = cleaned_texts[i]
-
-            if not text.strip():
-                st.warning(f"⚠️ Kein bereinigter Textinhalt in {url}")
-                continue
-
-            df_split = split_counts(text, top_terms)
-
+        for i, url in enumerate(urls):
+            df_split = split_counts(cleaned_texts[i], top_terms)
             st.markdown(f"**{url}**")
-            if df_split.empty:
-                st.warning(f"⚠️ Keine Begriffe aus den Top 50 im Text von {url}")
-            else:
-                styled = df_split.style.apply(highlight_max_nonzero, axis=0)
-                st.dataframe(styled)
-
+            styled = df_split.style.apply(highlight_max_nonzero, axis=0)
+            st.dataframe(styled)
