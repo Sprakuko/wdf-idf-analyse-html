@@ -97,15 +97,15 @@ if st.button("🔍 Analysieren"):
             info["Meta-Description"] = format_with_length(info["Meta-Description"], 160)
 
         df_meta = pd.DataFrame(meta_infos)
-        st.markdown("""
+        st.markdown(f"""
         <div style='overflow-x: auto; width: 100%;'>
             <style>
-                table { width: 100%; border-collapse: collapse; }
-                th, td { padding: 8px 12px; text-align: left; white-space: nowrap; }
+                table {{ width: 100%; border-collapse: collapse; }}
+                th, td {{ padding: 8px 12px; text-align: left; white-space: nowrap; }}
             </style>
-            {table}
+            {df_meta.to_html(escape=False, index=False)}
         </div>
-        """.format(table=df_meta.to_html(escape=False, index=False)), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
         st.subheader("📑 Überschriftenstruktur im Vergleich")
         if show_heading_warning:
@@ -120,11 +120,11 @@ if st.button("🔍 Analysieren"):
                 row.append(f"<div style='text-align:left; {style}; padding:4px'>{text}</div>" if text else "")
             rows.append(row)
         styled_df = pd.DataFrame(rows, columns=heading_data.keys())
-        st.markdown("""
+        st.markdown(f"""
         <div style='overflow-x:auto;'>
-        {table}
+        {styled_df.to_html(escape=False, index=False)}
         </div>
-        """.format(table=styled_df.to_html(escape=False, index=False)), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
         # Analyse vorbereiten
         stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
