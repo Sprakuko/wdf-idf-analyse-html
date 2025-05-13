@@ -107,26 +107,7 @@ if st.button("🔍 Analysieren"):
         </div>
         """, unsafe_allow_html=True)
 
-        st.subheader("📑 Überschriftenstruktur im Vergleich")
-        if show_heading_warning:
-            st.info("🔴 Rot markierte Überschriften deuten auf mögliche Fehler hin (z. B. H1-Fehler oder Hierarchiebruch).")
-        max_len = max(len(h) for h in heading_data.values())
-        rows = []
-        for i in range(max_len):
-            row = []
-            for url in heading_data:
-                text = heading_data[url][i] if i < len(heading_data[url]) else ""
-                style = heading_styles[url][i] if i < len(heading_styles[url]) else ""
-                row.append(f"<div style='text-align:left; {style}; padding:4px'>{text}</div>" if text else "")
-            rows.append(row)
-        styled_df = pd.DataFrame(rows, columns=heading_data.keys())
-        st.markdown(f"""
-        <div style='overflow-x:auto;'>
-        {styled_df.to_html(escape=False, index=False)}
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Analyse vorbereiten
+        # Bereinigung, TF/KD-Berechnung etc.
         stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
         der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
         einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
@@ -145,10 +126,10 @@ if st.button("🔍 Analysieren"):
 
         urls = [u for u, t in text_bodies if t.strip()]
         raw_texts = [t for _, t in text_bodies if t.strip()]
-        raw_word_counts = [len(re.findall(r"\b\w+\b", t)) for t in raw_texts]
+        raw_word_counts = [len(re.findall(r"\\b\\w+\\b", t)) for t in raw_texts]
 
         def clean_text(text, stopwords):
-            tokens = re.findall(r'\b[\wäöüß]+\b', text.lower(), flags=re.UNICODE)
+            tokens = re.findall(r'\\b[\\wäöüß]+\\b', text.lower(), flags=re.UNICODE)
             return " ".join([w for w in tokens if w not in stopwords])
 
         cleaned_texts = [clean_text(t, stopwords) for t in raw_texts]
@@ -162,11 +143,23 @@ if st.button("🔍 Analysieren"):
         for i, label in enumerate(urls):
             df_density[label] = (df_counts[label] / clean_word_counts[i] * 100).round(2)
 
-        df_avg = df_density.mean(axis=1)
-        top_terms = df_avg.sort_values(ascending=False).head(50).index
-        df_top_density = df_density.loc[top_terms]
-        df_top_counts = df_counts.loc[top_terms]
-        avg_top = df_top_density.mean(axis=1)
+        # === Benutzerdefinierter Begriff ===
+        st.subheader("🔎 Manuelle Analyse eines Begriffs")
+        keyword_input = st.text_input("Gib einen Begriff ein (z. B. 'surfcamps'):")
+        if st.button("Neu berechnen"):
+            if keyword_input:
+                term = keyword_input.strip().lower()
+                data = []
+                for url in urls:
+                    tf = df_counts.at[term, url] if term in df_counts.index else 0
+                    kd = df_density.at[term, url] if term in df_density.index else 0.0
+                    data.append({"URL": url, "TF": tf, "Keyworddichte (%)": round(kd, 2)})
+
+                df_keyword = pd.DataFrame(data)
+                st.markdown(f"**Auswertung für:** `{term}`")
+                st.table(df_keyword)
+            else:
+                st.warning("Bitte gib einen Begriff ein.")
 
         st.subheader("📊 Interaktives Diagramm")
 
