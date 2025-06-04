@@ -20,43 +20,87 @@ for i in range(4):
 
 custom_stops = st.text_input("➕ Optional: Eigene Stoppwörter (kommagetrennt)")
 
+# Hilfsfunktionen
+def parse_html_structure(html):
+    soup = BeautifulSoup(html, "html.parser")
+    meta_title = soup.title.string if soup.title else ""
+    meta_description = soup.find("meta", attrs={"name": "description"})
+    meta_description = meta_description["content"] if meta_description else ""
+
+    headings, styles = [], []
+    h1_count = 0
+    prev_level = 0
+
+    for tag in soup.find_all([f"h{i}" for i in range(1, 7)]):
+        level = int(tag.name[1])
+        style = ""
+        if level > prev_level + 1:
+            style = "background-color: #ffcdd2"
+        if tag.name == "h1":
+            h1_count += 1
+            if len(headings) > 0 or h1_count > 1:
+                style = "background-color: #ffcdd2"
+        headings.append((level, f"{tag.name.upper()}: {tag.get_text(strip=True)}", tag.name))
+        styles.append(style)
+        prev_level = level
+
+    headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
+    body_soup = soup.body if soup.body else soup
+    text = " ".join(tag.get_text(" ", strip=True) for tag in body_soup.find_all(["p"] + [f"h{i}" for i in range(1, 7)]))
+
+    return headings_text, styles, meta_title, meta_description, text
+
+def show_meta_table(meta_infos):
+    st.subheader("🔎 Meta-Informationen")
+
+    def format_with_length(text, limit):
+        if not text:
+            return "-"
+        length = len(text)
+        if length > limit:
+            return f"❗️{text} ({length} Zeichen)"
+        elif length > limit - 20:
+            return f"🟡 {text} ({length} Zeichen)"
+        return f"🟢 {text} ({length} Zeichen)"
+
+    for info in meta_infos:
+        info["Meta-Title"] = format_with_length(info["Meta-Title"], 60)
+        info["Meta-Description"] = format_with_length(info["Meta-Description"], 160)
+
+    st.dataframe(pd.DataFrame(meta_infos))
+
+def show_heading_structure(heading_data, heading_styles):
+    st.subheader("📑 Überschriftenstruktur im Vergleich")
+    if any(any(s for s in styles) for styles in heading_styles.values()):
+        st.info("🔴 Rot markierte Überschriften deuten auf mögliche Fehler hin (z. B. H1-Fehler oder Hierarchiebruch).")
+    max_len = max(len(h) for h in heading_data.values())
+    rows = []
+    for i in range(max_len):
+        row = []
+        for url in heading_data:
+            text = heading_data[url][i] if i < len(heading_data[url]) else ""
+            style = heading_styles[url][i] if i < len(heading_styles[url]) else ""
+            row.append(f"<div style='text-align:left; {style}; padding:4px'>{text}</div>" if text else "")
+        rows.append(row)
+    styled_df = pd.DataFrame(rows, columns=heading_data.keys())
+    st.markdown(f"""
+    <div style='overflow-x:auto;'>
+    {styled_df.to_html(escape=False, index=False)}
+    </div>
+    """, unsafe_allow_html=True)
+
+# Zusätzliche Code-spezifische Stopwords
+code_stopwords = {
+    "var", "return", "if", "else", "function", "new", "go", "static"
+}
+
 if st.button("🔍 Analysieren"):
     valid_inputs = [(url, html) for url, html in zip(urls, htmls) if url.strip() and html.strip()]
-
-    def parse_html_structure(html):
-        soup = BeautifulSoup(html, "html.parser")
-        meta_title = soup.title.string if soup.title else ""
-        meta_description = soup.find("meta", attrs={"name": "description"})
-        meta_description = meta_description["content"] if meta_description else ""
-
-        headings, styles = [], []
-        h1_count = 0
-        prev_level = 0
-
-        for tag in soup.find_all([f"h{i}" for i in range(1, 7)]):
-            level = int(tag.name[1])
-            style = ""
-            if level > prev_level + 1:
-                style = "background-color: #ffcdd2"
-            if tag.name == "h1":
-                h1_count += 1
-                if len(headings) > 0 or h1_count > 1:
-                    style = "background-color: #ffcdd2"
-            headings.append((level, f"{tag.name.upper()}: {tag.get_text(strip=True)}", tag.name))
-            styles.append(style)
-            prev_level = level
-
-        headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
-        body_soup = soup.body if soup.body else soup
-        text = " ".join(tag.get_text(" ", strip=True) for tag in body_soup.find_all(["p"] + [f"h{i}" for i in range(1, 7)]))
-
-        return headings_text, styles, meta_title, meta_description, text
 
     if len(valid_inputs) < 2:
         st.warning("Bitte gib mindestens zwei vollständige HTML-Quelltexte und ihre zugehörigen URLs ein.")
     else:
         heading_data, heading_styles, meta_infos, text_bodies = {}, {}, [], []
-        show_heading_warning = False
 
         for url, html in valid_inputs:
             headings, styles, meta_title, meta_desc, body_text = parse_html_structure(html)
@@ -64,72 +108,10 @@ if st.button("🔍 Analysieren"):
             heading_styles[url] = styles
             text_bodies.append((url, body_text))
             meta_infos.append({"URL": url, "Meta-Title": meta_title, "Meta-Description": meta_desc})
-            if any(s for s in styles):
-                show_heading_warning = True
 
-        st.subheader("🔎 Meta-Informationen")
+        show_meta_table(meta_infos)
+        show_heading_structure(heading_data, heading_styles)
 
-        def format_with_length(text, limit):
-            if not text:
-                return "-"
-            length = len(text)
-            if length > limit:
-                return f"❗️{text} ({length} Zeichen)"
-            elif length > limit - 20:
-                return f"🟡 {text} ({length} Zeichen)"
-            return f"🟢 {text} ({length} Zeichen)"
-
-        for info in meta_infos:
-            info["Meta-Title"] = format_with_length(info["Meta-Title"], 60)
-            info["Meta-Description"] = format_with_length(info["Meta-Description"], 160)
-
-        st.dataframe(pd.DataFrame(meta_infos))
-
-        st.subheader("📑 Überschriftenstruktur im Vergleich")
-        if show_heading_warning:
-            st.info("🔴 Rot markierte Überschriften deuten auf mögliche Fehler hin (z. B. H1-Fehler oder Hierarchiebruch).")
-
-        max_len = max(map(len, heading_data.values()))
-        rows = []
-        for i in range(max_len):
-            row = []
-            for url in heading_data:
-                text = heading_data[url][i] if i < len(heading_data[url]) else ""
-                style = heading_styles[url][i] if i < len(heading_styles[url]) else ""
-                cell = f"<div style='text-align:left; {style}; padding:4px'>{text}</div>" if text else ""
-                row.append(cell)
-            rows.append(row)
-
-        heading_df = pd.DataFrame(rows, columns=heading_data.keys())
-        st.markdown(
-            f"""
-            <div style='overflow-x:auto;'>
-            {heading_df.to_html(escape=False, index=False)}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        st.subheader("📑 Überschriftenstruktur im Vergleich")
-        if show_heading_warning:
-            st.info("🔴 Rot markierte Überschriften deuten auf mögliche Fehler hin (z. B. H1-Fehler oder Hierarchiebruch).")
-        max_len = max(len(h) for h in heading_data.values())
-        rows = []
-        for i in range(max_len):
-            row = []
-            for url in heading_data:
-                text = heading_data[url][i] if i < len(heading_data[url]) else ""
-                style = heading_styles[url][i] if i < len(heading_styles[url]) else ""
-                row.append(f"<div style='text-align:left; {style}; padding:4px'>{text}</div>" if text else "")
-            rows.append(row)
-        styled_df = pd.DataFrame(rows, columns=heading_data.keys())
-        st.markdown(f"""
-        <div style='overflow-x:auto;'>
-        {styled_df.to_html(escape=False, index=False)}
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Analyse vorbereiten
         stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
         der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
         einem, einen, einer, eines, er, es, etwas, euer, eure, für, gegen, gehabt, hab,
@@ -141,7 +123,10 @@ if st.button("🔍 Analysieren"):
         viel, vom, von, vor, war, waren, warst, was, weiter, welche, welchem, welchen,
         welcher, welches, wenn, wer, werde, werden, werdet, weshalb, wie, wieder, will, wir,
         wird, wirst, wo, wollen, wollte, würde, würden, zu, zum, zur, über"""
+
         stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
+        stopwords.update(code_stopwords)
+
         if custom_stops:
             user_stops = set(w.strip().lower() for w in custom_stops.split(",") if w.strip())
             stopwords.update(user_stops)
@@ -172,15 +157,13 @@ if st.button("🔍 Analysieren"):
         avg_top = df_top_density.mean(axis=1)
 
         st.subheader("📊 Interaktives Diagramm")
-
         fig = go.Figure()
         fig.add_trace(go.Bar(x=top_terms, y=avg_top, name="Durchschnitt", marker_color="lightgray"))
 
         for label in urls:
-            if label in df_top_density.columns:
-                tf_values = [f"TF: {df_top_counts.at[term, label]}" if term in df_top_counts.index else "TF: 0" for term in top_terms]
-                y_values = [df_top_density.at[term, label] if term in df_top_density.index else 0 for term in top_terms]
-                fig.add_trace(go.Scatter(x=top_terms, y=y_values, mode='lines+markers', name=label, text=tf_values, hoverinfo='text+y'))
+            tf_values = [f"TF: {df_top_counts.at[term, label]}" if term in df_top_counts.index else "TF: 0" for term in top_terms]
+            y_values = [df_top_density.at[term, label] if term in df_top_density.index else 0 for term in top_terms]
+            fig.add_trace(go.Scatter(x=top_terms, y=y_values, mode='lines+markers', name=label, text=tf_values, hoverinfo='text+y'))
 
         fig.update_layout(
             height=500,
@@ -201,8 +184,15 @@ if st.button("🔍 Analysieren"):
             top_table[url] = formatted
         st.dataframe(top_table)
 
-        st.subheader("📍 Drittelverteilung der Begriffe")
+        # Download als Excel
+        st.download_button(
+            label="📥 Excel-Download der Keyword-Dichte",
+            data=df_top_density.to_excel(index=True),
+            file_name="keyword_dichte.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
+        st.subheader("📍 Drittelverteilung der Begriffe")
         def split_counts(cleaned_text, terms):
             words = cleaned_text.split()
             thirds = np.array_split(words, 3)
