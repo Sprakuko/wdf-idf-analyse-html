@@ -33,12 +33,15 @@ if st.button("🔍 Analysieren"):
 
     def parse_html_structure(html):
         soup = BeautifulSoup(html, "html.parser")
+
         meta_title = soup.title.string if soup.title else ""
         meta_description = soup.find("meta", attrs={"name": "description"})
         meta_description = meta_description["content"] if meta_description else ""
+
         headings = []
         for tag in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
             headings.append((int(tag.name[1]), f"{tag.name.upper()}: {tag.get_text(strip=True)}", tag.name.lower()))
+
         styles = []
         h1_count = 0
         for i in range(len(headings)):
@@ -55,10 +58,26 @@ if st.button("🔍 Analysieren"):
             styles.append(style)
         headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
 
-        body = soup.body
-        body_soup = body if body else soup
-        texts = [tag.get_text(" ", strip=True) for tag in body_soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6"])]
-        body_text = " ".join(texts)
+        body = soup.body if soup.body else soup
+        text_elements = []
+
+        for tag in body.find_all(["p", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6"]):
+            text = tag.get_text(" ", strip=True)
+            if text:
+                text_elements.append(text)
+
+        for div in body.find_all("div"):
+            text = div.get_text(" ", strip=True)
+            if text and (len(text) > 30 or div.has_attr("class")):
+                text_elements.append(text)
+
+        def remove_code_like_lines(text_list):
+            pattern = re.compile(r'\b(return|var|let|const|if|else|function|for|while|\{|\}|=>|;)\b')
+            return [line for line in text_list if not pattern.search(line)]
+
+        cleaned_texts = remove_code_like_lines(text_elements)
+        body_text = " ".join(cleaned_texts)
+
         return headings_text, styles, meta_title, meta_description, body_text
 
     if len(valid_inputs) < 2:
