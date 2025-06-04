@@ -20,12 +20,18 @@ for i in range(4):
 
 custom_stops = st.text_input("➕ Optional: Eigene Stoppwörter (kommagetrennt)")
 
+# Zusätzliche Code-spezifische Stopwords
+code_stopwords = {
+    "var", "return", "if", "else", "function", "new", "go", "static"
+}
+
 # Hilfsfunktionen
+
 def parse_html_structure(html):
     soup = BeautifulSoup(html, "html.parser")
-    meta_title = soup.title.string if soup.title else ""
-    meta_description = soup.find("meta", attrs={"name": "description"})
-    meta_description = meta_description["content"] if meta_description else ""
+    meta_title = soup.title.string.strip() if soup.title and soup.title.string else ""
+    meta_description_tag = soup.find("meta", attrs={"name": "description"})
+    meta_description = meta_description_tag["content"].strip() if meta_description_tag and "content" in meta_description_tag.attrs else ""
 
     headings, styles = [], []
     h1_count = 0
@@ -40,59 +46,26 @@ def parse_html_structure(html):
             h1_count += 1
             if len(headings) > 0 or h1_count > 1:
                 style = "background-color: #ffcdd2"
-        headings.append((level, f"{tag.name.upper()}: {tag.get_text(strip=True)}", tag.name))
+        headings.append((level, f"{tag.name.upper()}: {tag.get_text(strip=True)}"))
         styles.append(style)
         prev_level = level
 
-    headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
+    headings_text = ["→" * (level - 1) + " " + text for level, text in headings]
+
     body_soup = soup.body if soup.body else soup
     text = " ".join(tag.get_text(" ", strip=True) for tag in body_soup.find_all(["p"] + [f"h{i}" for i in range(1, 7)]))
 
     return headings_text, styles, meta_title, meta_description, text
 
-def show_meta_table(meta_infos):
-    st.subheader("🔎 Meta-Informationen")
-
-    def format_with_length(text, limit):
-        if not text:
-            return "-"
-        length = len(text)
-        if length > limit:
-            return f"❗️{text} ({length} Zeichen)"
-        elif length > limit - 20:
-            return f"🟡 {text} ({length} Zeichen)"
-        return f"🟢 {text} ({length} Zeichen)"
-
-    for info in meta_infos:
-        info["Meta-Title"] = format_with_length(info["Meta-Title"], 60)
-        info["Meta-Description"] = format_with_length(info["Meta-Description"], 160)
-
-    st.dataframe(pd.DataFrame(meta_infos))
-
-def show_heading_structure(heading_data, heading_styles):
-    st.subheader("📑 Überschriftenstruktur im Vergleich")
-    if any(any(s for s in styles) for styles in heading_styles.values()):
-        st.info("🔴 Rot markierte Überschriften deuten auf mögliche Fehler hin (z. B. H1-Fehler oder Hierarchiebruch).")
-    max_len = max(len(h) for h in heading_data.values())
-    rows = []
-    for i in range(max_len):
-        row = []
-        for url in heading_data:
-            text = heading_data[url][i] if i < len(heading_data[url]) else ""
-            style = heading_styles[url][i] if i < len(heading_styles[url]) else ""
-            row.append(f"<div style='text-align:left; {style}; padding:4px'>{text}</div>" if text else "")
-        rows.append(row)
-    styled_df = pd.DataFrame(rows, columns=heading_data.keys())
-    st.markdown(f"""
-    <div style='overflow-x:auto;'>
-    {styled_df.to_html(escape=False, index=False)}
-    </div>
-    """, unsafe_allow_html=True)
-
-# Zusätzliche Code-spezifische Stopwords
-code_stopwords = {
-    "var", "return", "if", "else", "function", "new", "go", "static"
-}
+def format_with_length(text, limit):
+    if not text:
+        return "-"
+    length = len(text)
+    if length > limit:
+        return f"❗️{text} ({length} Zeichen)"
+    elif length > limit - 20:
+        return f"🟡 {text} ({length} Zeichen)"
+    return f"🟢 {text} ({length} Zeichen)"
 
 if st.button("🔍 Analysieren"):
     valid_inputs = [(url, html) for url, html in zip(urls, htmls) if url.strip() and html.strip()]
@@ -107,10 +80,29 @@ if st.button("🔍 Analysieren"):
             heading_data[url] = headings
             heading_styles[url] = styles
             text_bodies.append((url, body_text))
-            meta_infos.append({"URL": url, "Meta-Title": meta_title, "Meta-Description": meta_desc})
+            meta_infos.append({
+                "URL": url,
+                "Meta-Title": format_with_length(meta_title, 60),
+                "Meta-Description": format_with_length(meta_desc, 160)
+            })
 
-        show_meta_table(meta_infos)
-        show_heading_structure(heading_data, heading_styles)
+        st.subheader("🔎 Meta-Informationen")
+        st.dataframe(pd.DataFrame(meta_infos))
+
+        st.subheader("📑 Überschriftenstruktur im Vergleich")
+        max_len = max(len(hs) for hs in heading_data.values())
+        heading_rows = []
+        for i in range(max_len):
+            row = []
+            for url in heading_data:
+                row.append(heading_data[url][i] if i < len(heading_data[url]) else "")
+            heading_rows.append(row)
+        heading_df = pd.DataFrame(heading_rows, columns=heading_data.keys())
+        st.markdown(f"""
+        <div style='overflow-x:auto;'>
+        {heading_df.to_html(escape=False, index=False)}
+        </div>
+        """, unsafe_allow_html=True)
 
         stopwords_raw = """aber, alle, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, damit, dann,
         der, die, das, dass, deren, dessen, dem, den, denn, dich, dir, du, ein, eine,
@@ -126,7 +118,6 @@ if st.button("🔍 Analysieren"):
 
         stopwords = set(w.strip().lower() for w in re.split(r",\s*", stopwords_raw))
         stopwords.update(code_stopwords)
-
         if custom_stops:
             user_stops = set(w.strip().lower() for w in custom_stops.split(",") if w.strip())
             stopwords.update(user_stops)
@@ -184,7 +175,6 @@ if st.button("🔍 Analysieren"):
             top_table[url] = formatted
         st.dataframe(top_table)
 
-        # Download als Excel
         st.download_button(
             label="📥 Excel-Download der Keyword-Dichte",
             data=df_top_density.to_excel(index=True),
