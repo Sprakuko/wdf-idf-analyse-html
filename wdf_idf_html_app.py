@@ -5,6 +5,7 @@ import re
 from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import CountVectorizer
 import plotly.graph_objects as go
+from io import BytesIO
 
 st.set_page_config(page_title="HTML & WDF*IDF Analyse", layout="wide")
 st.title("🔍 HTML- und WDF*IDF-Analyse im Vergleich")
@@ -27,6 +28,16 @@ with col4:
 
 custom_stops = st.text_input("➕ Optional: Eigene Stoppwörter (kommagetrennt)")
 
+# Exportfunktion vorbereiten
+def convert_df_to_excel(df_dict):
+    output = BytesIO()
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    for sheet_name, df in df_dict.items():
+        df.to_excel(writer, index=True, sheet_name=sheet_name)
+    writer.close()
+    processed_data = output.getvalue()
+    return processed_data
+
 if st.button("🔍 Analysieren"):
     inputs = [(url1, html1), (url2, html2), (url3, html3), (url4, html4)]
     valid_inputs = [(url, html) for url, html in inputs if url.strip() and html.strip()]
@@ -34,59 +45,20 @@ if st.button("🔍 Analysieren"):
     def parse_html_structure(html):
         soup = BeautifulSoup(html, "html.parser")
 
-        # Entferne <script>, <style>, <code>, <pre> komplett
-        for tag in soup(['script', 'style', 'code', 'pre']):
+        # Entferne <script>, <style>, <code>, <pre>, <noscript> komplett
+        for tag in soup(['script', 'style', 'code', 'pre', 'noscript']):
             tag.decompose()
 
-        meta_title = soup.title.string if soup.title else ""
-        meta_description = soup.find("meta", attrs={"name": "description"})
-        meta_description = meta_description["content"] if meta_description else ""
+        # Extrahiere Meta-Daten
+        meta_title = soup.title.string.strip() if soup.title and soup.title.string else ""
+        meta_description_tag = soup.find("meta", attrs={"name": "description"})
+        meta_description = meta_description_tag["content"].strip() if meta_description_tag and meta_description_tag.get("content") else ""
 
-        headings = []
-        for tag in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
-            headings.append((int(tag.name[1]), f"{tag.name.upper()}: {tag.get_text(strip=True)}", tag.name.lower()))
-
-        styles = []
-        h1_count = 0
-        for i in range(len(headings)):
-            current_level = headings[i][0]
-            tag_name = headings[i][2]
-            prev_level = headings[i - 1][0] if i > 0 else current_level
-            style = ""
-            if current_level > prev_level + 1:
-                style = "background-color: #ffcdd2"
-            if tag_name == "h1":
-                h1_count += 1
-                if i != 0 or h1_count > 1:
-                    style = "background-color: #ffcdd2"
-            styles.append(style)
-        headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
-
+        # Extrahiere nur reinen sichtbaren Text im Body
         body = soup.body if soup.body else soup
-        text_elements = []
+        visible_text = body.get_text(" ", strip=True)
 
-        for tag in body.find_all(["p", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6"]):
-            text = tag.get_text(" ", strip=True)
-            if text:
-                text_elements.append(text)
-
-        for div in body.find_all("div"):
-            text = div.get_text(" ", strip=True)
-            if text and (len(text) > 30 or div.has_attr("class")):
-                text_elements.append(text)
-
-        def remove_code_like_lines(text_list):
-            pattern = re.compile(r'^(\s)*(return|var|let|const|if|else|function|for|while|=>|\{|\}|;)(\s|\(|\)|\{|\}|;|$)')
-            filtered = []
-            for line in text_list:
-                if not pattern.search(line.strip()):
-                    filtered.append(line)
-            return filtered
-
-        cleaned_texts = remove_code_like_lines(text_elements)
-        body_text = " ".join(cleaned_texts)
-
-        return headings_text, styles, meta_title, meta_description, body_text
+        return meta_title, meta_description, visible_text
 
     if len(valid_inputs) < 2:
         st.warning("Bitte gib mindestens zwei vollständige HTML-Quelltexte und ihre zugehörigen URLs ein.")
