@@ -5,68 +5,57 @@ import re
 from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import CountVectorizer
 import plotly.graph_objects as go
-from io import BytesIO
 
 st.set_page_config(page_title="HTML & WDF*IDF Analyse", layout="wide")
 st.title("🔍 HTML- und WDF*IDF-Analyse im Vergleich")
 
 # Abschnitt 1: HTML Input
 st.header("1️⃣ HTML Heading Checker")
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    url1 = st.text_input("🌐 URL zu deinem HTML")
-    html1 = st.text_area("Quelltext 1", height=300)
-with col2:
-    url2 = st.text_input("URL Vergleich 1")
-    html2 = st.text_area("Vergleich 1", height=300)
-with col3:
-    url3 = st.text_input("URL Vergleich 2")
-    html3 = st.text_area("Vergleich 2", height=300)
-with col4:
-    url4 = st.text_input("URL Vergleich 3")
-    html4 = st.text_area("Vergleich 3", height=300)
+cols = st.columns(4)
+urls = []
+htmls = []
+for i in range(4):
+    urls.append(cols[i].text_input(f"🌐 URL {i+1}" if i == 0 else f"URL Vergleich {i}"))
+    htmls.append(cols[i].text_area(f"Quelltext {i+1}" if i == 0 else f"Vergleich {i}", height=300))
 
 custom_stops = st.text_input("➕ Optional: Eigene Stoppwörter (kommagetrennt)")
 
-# Exportfunktion vorbereiten
-def convert_df_to_excel(df_dict):
-    output = BytesIO()
-    writer = pd.ExcelWriter(output, engine='xlsxwriter')
-    for sheet_name, df in df_dict.items():
-        df.to_excel(writer, index=True, sheet_name=sheet_name)
-    writer.close()
-    processed_data = output.getvalue()
-    return processed_data
-
 if st.button("🔍 Analysieren"):
-    inputs = [(url1, html1), (url2, html2), (url3, html3), (url4, html4)]
-    valid_inputs = [(url, html) for url, html in inputs if url.strip() and html.strip()]
+    valid_inputs = [(url, html) for url, html in zip(urls, htmls) if url.strip() and html.strip()]
 
     def parse_html_structure(html):
         soup = BeautifulSoup(html, "html.parser")
+        meta_title = soup.title.string if soup.title else ""
+        meta_description = soup.find("meta", attrs={"name": "description"})
+        meta_description = meta_description["content"] if meta_description else ""
 
-        # Entferne <script>, <style>, <code>, <pre>, <noscript> komplett
-        for tag in soup(['script', 'style', 'code', 'pre', 'noscript']):
-            tag.decompose()
+        headings, styles = [], []
+        h1_count = 0
+        prev_level = 0
 
-        # Extrahiere Meta-Daten
-        meta_title = soup.title.string.strip() if soup.title and soup.title.string else ""
-        meta_description_tag = soup.find("meta", attrs={"name": "description"})
-        meta_description = meta_description_tag["content"].strip() if meta_description_tag and meta_description_tag.get("content") else ""
+        for tag in soup.find_all([f"h{i}" for i in range(1, 7)]):
+            level = int(tag.name[1])
+            style = ""
+            if level > prev_level + 1:
+                style = "background-color: #ffcdd2"
+            if tag.name == "h1":
+                h1_count += 1
+                if len(headings) > 0 or h1_count > 1:
+                    style = "background-color: #ffcdd2"
+            headings.append((level, f"{tag.name.upper()}: {tag.get_text(strip=True)}", tag.name))
+            styles.append(style)
+            prev_level = level
 
-        # Extrahiere nur reinen sichtbaren Text im Body
-        body = soup.body if soup.body else soup
-        visible_text = body.get_text(" ", strip=True)
+        headings_text = ["→" * (h[0] - 1) + " " + h[1] for h in headings]
+        body_soup = soup.body if soup.body else soup
+        text = " ".join(tag.get_text(" ", strip=True) for tag in body_soup.find_all(["p"] + [f"h{i}" for i in range(1, 7)]))
 
-        return meta_title, meta_description, visible_text
+        return headings_text, styles, meta_title, meta_description, text
 
     if len(valid_inputs) < 2:
         st.warning("Bitte gib mindestens zwei vollständige HTML-Quelltexte und ihre zugehörigen URLs ein.")
     else:
-        heading_data = {}
-        heading_styles = {}
-        meta_infos = []
-        text_bodies = []
+        heading_data, heading_styles, meta_infos, text_bodies = {}, {}, [], []
         show_heading_warning = False
 
         for url, html in valid_inputs:
@@ -75,7 +64,7 @@ if st.button("🔍 Analysieren"):
             heading_styles[url] = styles
             text_bodies.append((url, body_text))
             meta_infos.append({"URL": url, "Meta-Title": meta_title, "Meta-Description": meta_desc})
-            if any(s != "" for s in styles):
+            if any(s for s in styles):
                 show_heading_warning = True
 
         st.subheader("🔎 Meta-Informationen")
@@ -88,23 +77,38 @@ if st.button("🔍 Analysieren"):
                 return f"❗️{text} ({length} Zeichen)"
             elif length > limit - 20:
                 return f"🟡 {text} ({length} Zeichen)"
-            else:
-                return f"🟢 {text} ({length} Zeichen)"
+            return f"🟢 {text} ({length} Zeichen)"
 
         for info in meta_infos:
             info["Meta-Title"] = format_with_length(info["Meta-Title"], 60)
             info["Meta-Description"] = format_with_length(info["Meta-Description"], 160)
 
-        df_meta = pd.DataFrame(meta_infos)
-        st.markdown(f"""
-        <div style='overflow-x: auto; width: 100%;'>
-            <style>
-                table {{ width: 100%; border-collapse: collapse; }}
-                th, td {{ padding: 8px 12px; text-align: left; white-space: nowrap; }}
-            </style>
-            {df_meta.to_html(escape=False, index=False)}
-        </div>
-        """, unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(meta_infos))
+
+        st.subheader("📑 Überschriftenstruktur im Vergleich")
+        if show_heading_warning:
+            st.info("🔴 Rot markierte Überschriften deuten auf mögliche Fehler hin (z. B. H1-Fehler oder Hierarchiebruch).")
+
+        max_len = max(map(len, heading_data.values()))
+        rows = []
+        for i in range(max_len):
+            row = []
+            for url in heading_data:
+                text = heading_data[url][i] if i < len(heading_data[url]) else ""
+                style = heading_styles[url][i] if i < len(heading_styles[url]) else ""
+                cell = f"<div style='text-align:left; {style}; padding:4px'>{text}</div>" if text else ""
+                row.append(cell)
+            rows.append(row)
+
+        heading_df = pd.DataFrame(rows, columns=heading_data.keys())
+        st.markdown(
+            f"""
+            <div style='overflow-x:auto;'>
+            {heading_df.to_html(escape=False, index=False)}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
         st.subheader("📑 Überschriftenstruktur im Vergleich")
         if show_heading_warning:
