@@ -34,6 +34,10 @@ if st.button("🔍 Analysieren"):
     def parse_html_structure(html):
         soup = BeautifulSoup(html, "html.parser")
 
+        # Entferne <script>, <style>, <code>, <pre> komplett
+        for tag in soup(['script', 'style', 'code', 'pre']):
+            tag.decompose()
+
         meta_title = soup.title.string if soup.title else ""
         meta_description = soup.find("meta", attrs={"name": "description"})
         meta_description = meta_description["content"] if meta_description else ""
@@ -72,8 +76,12 @@ if st.button("🔍 Analysieren"):
                 text_elements.append(text)
 
         def remove_code_like_lines(text_list):
-            pattern = re.compile(r'\b(return|var|let|const|if|else|function|for|while|\{|\}|=>|;)\b')
-            return [line for line in text_list if not pattern.search(line)]
+            pattern = re.compile(r'^(\s)*(return|var|let|const|if|else|function|for|while|=>|\{|\}|;)(\s|\(|\)|\{|\}|;|$)')
+            filtered = []
+            for line in text_list:
+                if not pattern.search(line.strip()):
+                    filtered.append(line)
+            return filtered
 
         cleaned_texts = remove_code_like_lines(text_elements)
         body_text = " ".join(cleaned_texts)
